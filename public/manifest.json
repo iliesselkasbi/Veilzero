@@ -1,0 +1,16 @@
+{
+  "name": "VEILZERO Off-Grid",
+  "short_name": "VEILZERO",
+  "description": "Zero-trust survival suite for the underground.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#00FF41",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

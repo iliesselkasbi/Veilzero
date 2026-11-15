@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Button from "@/components/ui/Button";
+import IntegrityPanel from "@/components/ui/IntegrityPanel";
 import { download } from "@/lib/fileUtils";
 import type { CleanResult } from "@/types/pool";
 import { buildResistanceDrop } from "@/lib/resistanceDrop";
@@ -9,9 +10,11 @@ import { buildResistanceDrop } from "@/lib/resistanceDrop";
 export default function CleanExport({
   result,
   remaining,
+  originalFile,
 }: {
   result: CleanResult;
   remaining: number | null;
+  originalFile?: File | null;
 }) {
   const threatsLeft = remaining ?? 0;
   const clean = threatsLeft === 0;
@@ -62,11 +65,12 @@ export default function CleanExport({
         )}
       </div>
 
+      <IntegrityPanel original={originalFile} output={result.blob} outputLabel="Cleaned" />
+
       <Button
         onClick={() => download(result.blob, result.fileName)}
         className="w-full"
         disabled={!clean}
-        title={clean ? "Download cleaned file" : "Blocked while residual threats remain"}
       >
         {clean ? "Download cleaned file" : "Download blocked until clean"}
       </Button>
@@ -84,9 +88,6 @@ export default function CleanExport({
       <div className="rounded-lg border border-border bg-surface-alt p-3 space-y-2">
         <p className="font-mono text-[11px] uppercase tracking-wide text-primary">
           Resistance Drop · Encrypt &amp; Burn
-        </p>
-        <p className="text-xs text-text-muted">
-          Password-locked HTML dead-drop. Works offline. No servers.
         </p>
         <input
           type="password"

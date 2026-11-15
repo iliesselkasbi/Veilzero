@@ -18,6 +18,7 @@ import Button from "@/components/ui/Button";
 import { COPY } from "@/lib/constants";
 import { DEFAULT_MASK } from "@/config/masks";
 import type { MaskId } from "@/types/stream";
+import ThreatModel from "@/components/ui/ThreatModel";
 
 export default function LivePage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -135,6 +136,9 @@ export default function LivePage() {
         onClose={() => setExportOpen(false)}
         onDiscard={rec.discard}
       />
+      <div className="mt-10">
+        <ThreatModel />
+      </div>
     </div>
   );
 }

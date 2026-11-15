@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import BurnButton from "@/components/layout/BurnButton";
 
 const links = [
-  { href: "/live", label: "Live" },
-  { href: "/clean", label: "Clean" },
+  { href: "/live", label: "Witness Cam" }, // Name for the Hollow narrative!
+  { href: "/clean", label: "Evidence Scrub" },
   { href: "/about", label: "About" },
 ];
 
@@ -17,22 +18,26 @@ export default function Navbar() {
         <Link href="/" className="font-display font-bold tracking-[0.3em] text-text">
           VEILZERO
         </Link>
-        <ul className="flex items-center gap-6 text-sm">
-          {links.map((l) => (
-            <li key={l.href}>
-              <Link
-                href={l.href}
-                className={
-                  pathname === l.href
-                    ? "text-primary"
-                    : "text-text-muted hover:text-text transition-colors"
-                }
-              >
-                {l.label}
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <div className="flex items-center gap-6">
+          <ul className="flex items-center gap-6 text-sm">
+            {links.map((l) => (
+              <li key={l.href}>
+                <Link
+                  href={l.href}
+                  className={
+                    pathname === l.href
+                      ? "text-[#00FF41]"
+                      : "text-text-muted hover:text-text transition-colors"
+                  }
+                >
+                  {l.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <div className="w-px h-6 bg-border"></div>
+          <BurnButton />
+        </div>
       </nav>
     </header>
   );

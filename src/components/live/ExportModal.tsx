@@ -3,10 +3,12 @@
 import { useState } from "react";
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
+import IntegrityPanel from "@/components/ui/IntegrityPanel";
 import { COPY } from "@/lib/constants";
 import { download, formatBytes } from "@/lib/fileUtils";
 import type { RecordingResult } from "@/types/stream";
 import { buildResistanceDrop } from "@/lib/resistanceDrop";
+import { burnObjectUrls } from "@/lib/burn";
 
 interface Props {
   result: RecordingResult | null;
@@ -20,13 +22,11 @@ export default function ExportModal({ result, open, onClose, onDiscard }: Props)
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
 
-  const recording = result;
-  if (!recording) return null;
-  const ext = recording.mimeType.includes("mp4") ? "mp4" : "webm";
-  const secs = Math.round(recording.durationMs / 1000);
+  if (!result) return null;
+  const ext = result.mimeType.includes("mp4") ? "mp4" : "webm";
+  const secs = Math.round(result.durationMs / 1000);
 
   async function exportDrop() {
-    if (!recording) return;
     if (!password || password.length < 4) {
       setNote("Password must be at least 4 characters.");
       return;
@@ -35,7 +35,7 @@ export default function ExportModal({ result, open, onClose, onDiscard }: Props)
     setNote("Encrypting Resistance Drop…");
     try {
       const html = await buildResistanceDrop({
-        blob: recording.blob,
+        blob: result.blob,
         fileName: `veilzero-live-${Date.now()}.${ext}`,
         password,
         kind: "live",
@@ -50,31 +50,32 @@ export default function ExportModal({ result, open, onClose, onDiscard }: Props)
     }
   }
 
+  function discardAndBurn() {
+    burnObjectUrls(result.url);
+    onDiscard();
+    onClose();
+  }
+
   return (
     <Modal open={open} onClose={onClose} title={COPY.recordingDone}>
-      <video src={recording.url} controls className="w-full rounded-lg border border-border bg-black" />
+      <video src={result.url} controls className="w-full rounded-lg border border-border bg-black" />
       <p className="mt-3 font-mono text-xs text-text-muted">
-        {secs}s · {formatBytes(recording.blob.size)} · .{ext}
+        {secs}s · {formatBytes(result.blob.size)} · .{ext}
       </p>
-      <p className="mt-1 text-xs text-text-muted">
-        Cloaked canvas + destroyed voice only. Raw camera/mic never touched disk.
-      </p>
+
+      <div className="mt-3">
+        <IntegrityPanel output={result.blob} outputLabel="Recording" />
+      </div>
 
       <div className="mt-5 flex gap-3">
         <Button
           className="flex-1"
-          onClick={() => download(recording.blob, `veilzero-${Date.now()}.${ext}`)}
+          onClick={() => download(result.blob, `veilzero-${Date.now()}.${ext}`)}
         >
           {COPY.export} raw
         </Button>
-        <Button
-          variant="secondary"
-          onClick={() => {
-            onDiscard();
-            onClose();
-          }}
-        >
-          Discard
+        <Button variant="secondary" onClick={discardAndBurn}>
+          Burn clip
         </Button>
       </div>
 

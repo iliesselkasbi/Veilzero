@@ -1,5 +1,6 @@
 "use client";
-
+import ThreatModel from "@/components/ui/ThreatModel";
+import { burnObjectUrls, burnTabHard } from "@/lib/burn";
 import { useMetadata } from "@/hooks/useMetadata";
 import DropZone from "@/components/clean/DropZone";
 import FilePreview from "@/components/clean/FilePreview";
@@ -64,9 +65,26 @@ export default function CleanPage() {
                   leftover={m.remainingTraces.filter((t) => !isThreatTrace(t))}
                   remainingAll={m.remainingTraces}
                 />
-                <CleanExport result={m.result} remaining={m.remaining} />
+                <CleanExport result={m.result} remaining={m.remaining} originalFile={m.file} />
               </>
             )}
+
+            { /* near bottm of page (outside the gird or under header actions) */}
+
+            <div className="mt-10 space-y-4">
+              <ThreatModel />
+              <Button
+                variant="secondary"
+                className="border-danger/50 text-danger"
+                onClick={() => {
+                  burnObjectUrls();
+                  void burnTabHard();
+                  m.reset();
+                }}
+                >
+        BURN TAB · wipe session
+        </Button>
+            </div>
           </Card>
         </div>
       )}
