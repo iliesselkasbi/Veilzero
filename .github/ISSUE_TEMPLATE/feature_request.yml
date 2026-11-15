@@ -1,0 +1,26 @@
+name: Feature request
+description: Propose a focused improvement.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What user need or problem would this address?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Describe the smallest useful solution.
+    validations:
+      required: true
+  - type: textarea
+    id: considerations
+    attributes:
+      label: Privacy and accessibility considerations
+      description: Note any impact on local processing, permissions, data handling, or accessibility.
+    validations:
+      required: true

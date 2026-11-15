@@ -1,0 +1,10 @@
+cat > .gitignore <<'EOF'
+node_modules
+.next
+out
+next-env.d.ts
+*.tsbuildinfo
+.env*
+public/mediapipe
+aaa-main.zip
+EOF

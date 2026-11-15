@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "Cinzel";
+  src: url("/fonts/Cinzel-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/JetBrainsMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
+:root {
+  --bg: #020202; /* Pitch black */
+  --surface: #0a0a0a;
+  --surface-alt: #111111;
+  --border: #1f2937; /* faint red tint to borders */
+  --primary: #00FF41; /* Classic Terminal Green */
+  --primary-dim: #008F11;
+  --text: #e5e5e5;
+  --text-muted: #737373;
+  --danger: #ff003c; /* Harsher red */
+  --success: #00FF41;
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+  content: " ";
+  display: block;
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle, rgba(0,0,0,0) 40%, rgba(0,0,0,0.85) 100%);
+  pointer-events: none;
+  z-index: 40;
+}
+
+/* HARSHER SCANLINES */
+.scanlines {
+  background: linear-gradient(
+    to bottom,
+    rgba(255,255,255,0),
+    rgba(255,255,255,0) 50%,
+    rgba(0, 255, 65, 0.05) 50%, /* Slight green tint to scanlines */
+    rgba(0, 0, 0, 0.3)
+  );
+  background-size: 100% 4px;
+}
+
+::selection {
+  background: var(--primary);
+  color: #000;
+}
+
+/* Add this to make headings glow */
+h1, h2, .eyebrow {
+  text-shadow: 0 0 10px rgba(0, 255, 65, 0.3);
+}
