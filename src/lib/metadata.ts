@@ -14,11 +14,35 @@ const tag = (b: Uint8Array, o: number) => String.fromCharCode(b[o], b[o + 1], b[
 
 function categorize(key: string): MetadataTrace["category"] {
   const k = key.toLowerCase();
-  if (/gps|latitude|longitude|altitude|location/.test(k)) return "location";
-  if (/make|model|lens|serial|device|camera|software|firmware/.test(k)) return "device";
-  if (/date|time|created|modified/.test(k)) return "time";
-  if (/artist|author|creator|owner|copyright|name|creatortool|producer/.test(k)) return "identity";
-  if (/software|producer/.test(k)) return "software";
+
+  // Color / container profile labels are NOT people
+  if (
+    /profile.?name|profile.?description|icc|color.?space|rendering.?intent|chromatic|whitepoint|gamma|srgb/.test(
+      k
+    )
+  ) {
+    return "other";
+  }
+
+  if (/gps|latitude|longitude|altitude|location|destination/.test(k)) return "location";
+
+  // identity: people / owners — DO NOT use bare "name"
+  if (
+    /artist|author|by-line|byline|creator(?!tool)|owner|copyright|username|xpauthor|contact|email|writer/.test(
+      k
+    )
+  ) {
+    return "identity";
+  }
+
+  if (/make|model|lens|serial|device|camera|hostcomputer|unique.?id|body.?serial/.test(k))
+    return "device";
+
+  if (/date|time|created|modified|subsec|offsettime/.test(k)) return "time";
+
+  if (/software|firmware|creatortool|producer|engine|processing|history/.test(k))
+    return "software";
+
   return "other";
 }
 
@@ -124,7 +148,18 @@ function stripJpeg(b: Uint8Array): Uint8Array {
   return concat(chunks);
 }
 
-const PNG_DROP = new Set(["tEXt", "zTXt", "iTXt", "eXIf", "tIME"]);
+// ICC profile - source of ProfileName
+
+const PNG_DROP = new Set([
+  "tEXt",
+  "zTXt",
+  "iTXt",
+  "eXIf",
+  "tIME",
+  "iCCP", // ICC profile — source of ProfileName.
+  "pHYs", // optional: pixel dimensions DPI can be fingerprint-ish.
+]);
+
 
 function stripPng(b: Uint8Array): Uint8Array {
   const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -273,6 +308,27 @@ export function supportsStrip(file: File): { ok: boolean; reason?: string } {
   };
 }
 
+
+async function hardenImageBlob(blob: Blob, fileName: string): Promise<Blob> {
+  const buf = new Uint8Array(await blob.arrayBuffer());
+  const lower = fileName.toLowerCase();
+  const type = blob.type;
+
+  try {
+    if (type === "image/png" || lower.endsWith(".png")) {
+      return new Blob([Uint8Array.from(stripPng(buf))], { type: "image/png" });
+    }
+    if (type === "image/jpeg" || /\.jpe?g$/.test(lower)) {
+      return new Blob([Uint8Array.from(stripJpeg(buf))], { type: "image/jpeg" });
+    }
+    if (type === "image/webp" || lower.endsWith(".webp")) {
+      return new Blob([Uint8Array.from(stripWebp(buf))], { type: "image/webp" });
+    }
+  } catch {
+    /* fall through, keep prior blob */
+  }
+  return blob;
+}
 export async function stripMetadata(file: File, traces: MetadataTrace[]): Promise<CleanResult> {
   const kind = detectKind(file);
   const buf = new Uint8Array(await file.arrayBuffer());
@@ -294,10 +350,16 @@ export async function stripMetadata(file: File, traces: MetadataTrace[]): Promis
       blob = await reencodeImage(file);
     }
 
+    blob = await hardenImageBlob(blob, file.name);
+
+
     // If lossless strip left identifying tags, force canvas re-encode (guarantees EXIF/XMP death)
     const probe = new File([blob], file.name, { type: blob.type || file.type });
-    const left = (await scanMetadata(probe)).filter((t) => {
+    const leftThreats = (await scanMetadata(probe)).filter(isThreatTrace);
+    /*
+     => {
       // inline check to avoid circular import issues if any
+
       const k = t.key.toLowerCase();
       if (t.key.startsWith("⚠️")) return true;
       if (/width|height|bitdepth|colortype|compression|jfif|resolution|orientation|mimetype|filetype|exifbyteorder|thumbnail|megapixel|encoding|component|ycbcr|photometric|samplesperpixel|filter|interlace|predictor|profile/i.test(k)) {
@@ -305,8 +367,11 @@ export async function stripMetadata(file: File, traces: MetadataTrace[]): Promis
       }
       return true;
     });
-    if (left.length > 0) {
+    */
+    if (leftThreats.length > 0) {
       blob = await reencodeImage(file);
+      blob = await hardenImageBlob(blob, file.name);
+
     }
   } else if (kind === "video" || kind === "audio") {
     const { data } = stripMp4(buf);
@@ -320,7 +385,7 @@ export async function stripMetadata(file: File, traces: MetadataTrace[]): Promis
     fileName: cleanName(file.name),
     originalSize: file.size,
     cleanSize: blob.size,
-    tracesRemoved: traces.length,
+    tracesRemoved: traces.filter(isThreatTrace).length,
   };
 }
 /** Re-scan cleaned output. Only identifying leftovers count as failures. */

@@ -7,7 +7,10 @@ import IntegrityPanel from "@/components/ui/IntegrityPanel";
 import { COPY } from "@/lib/constants";
 import { download, formatBytes } from "@/lib/fileUtils";
 import type { RecordingResult } from "@/types/stream";
-import { buildResistanceDrop } from "@/lib/resistanceDrop";
+import {
+  buildResistanceDrop,
+  type DropPreset,
+} from "@/lib/resistanceDrop";
 import { burnObjectUrls } from "@/lib/burn";
 
 interface Props {
@@ -17,31 +20,50 @@ interface Props {
   onDiscard: () => void;
 }
 
+const EVIDENCE_OPTIONS = [
+  { id: "TAINTED_WATER_PROOF", label: "Contaminated water" },
+  { id: "OUTBREAK_CLUSTER", label: "Lung sickness cluster" },
+  { id: "SURFACE_ATMOSPHERE_SAFE", label: "Surface air claim" },
+  { id: "BLACKOUT_AIR_CUT", label: "Air supply cutoff" },
+] as const;
+
 export default function ExportModal({ result, open, onClose, onDiscard }: Props) {
   const [password, setPassword] = useState("");
+  const [preset, setPreset] = useState<DropPreset>("standard");
+  const [level, setLevel] = useState("Level 12 · Deep");
+  const [status, setStatus] = useState("Alive · need medicine");
+  const [category, setCategory] = useState<string>(EVIDENCE_OPTIONS[0].id);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
 
   if (!result) return null;
+
   const ext = result.mimeType.includes("mp4") ? "mp4" : "webm";
   const secs = Math.round(result.durationMs / 1000);
 
   async function exportDrop() {
+    if (!result) return;
     if (!password || password.length < 4) {
       setNote("Password must be at least 4 characters.");
       return;
     }
     setBusy(true);
-    setNote("Encrypting Resistance Drop…");
+    setNote("Encrypting resistance drop…");
     try {
       const html = await buildResistanceDrop({
         blob: result.blob,
         fileName: `veilzero-live-${Date.now()}.${ext}`,
         password,
         kind: "live",
+        meta: {
+          preset,
+          level: preset === "family_pulse" ? level : undefined,
+          status: preset === "family_pulse" ? status : undefined,
+          category: preset === "evidence" ? category : undefined,
+        },
       });
-      download(html, `veilzero-drop-${Date.now()}.html`);
-      setNote("Drop ready. Send passphrase on a different channel.");
+      download(html, `veilzero-${preset}-${Date.now()}.html`);
+      setNote("Drop ready. Share the passphrase on a separate channel.");
     } catch (e) {
       console.error(e);
       setNote("Encryption failed.");
@@ -51,6 +73,7 @@ export default function ExportModal({ result, open, onClose, onDiscard }: Props)
   }
 
   function discardAndBurn() {
+    if (!result) return;
     burnObjectUrls(result.url);
     onDiscard();
     onClose();
@@ -58,47 +81,110 @@ export default function ExportModal({ result, open, onClose, onDiscard }: Props)
 
   return (
     <Modal open={open} onClose={onClose} title={COPY.recordingDone}>
-      <video src={result.url} controls className="w-full rounded-lg border border-border bg-black" />
-      <p className="mt-3 font-mono text-xs text-text-muted">
-        {secs}s · {formatBytes(result.blob.size)} · .{ext}
-      </p>
-
-      <div className="mt-3">
-        <IntegrityPanel output={result.blob} outputLabel="Recording" />
-      </div>
-
-      <div className="mt-5 flex gap-3">
-        <Button
-          className="flex-1"
-          onClick={() => download(result.blob, `veilzero-${Date.now()}.${ext}`)}
-        >
-          {COPY.export} raw
-        </Button>
-        <Button variant="secondary" onClick={discardAndBurn}>
-          Burn clip
-        </Button>
-      </div>
-
-      <div className="mt-4 rounded-lg border border-border bg-surface-alt p-3 space-y-2">
-        <p className="font-mono text-[11px] uppercase tracking-wide text-primary">
-          Resistance Drop · Encrypt &amp; Burn
-        </p>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Shared passphrase"
-          className="w-full rounded border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-primary"
+      {/* CRITICAL: scrollable body so Generate is always reachable */}
+      <div className="max-h-[min(70vh,640px)] overflow-y-auto overscroll-contain pr-1 space-y-4">
+        <video
+          src={result.url}
+          controls
+          className="w-full rounded-lg border border-border bg-black"
         />
-        <Button
-          className="w-full"
-          variant="secondary"
-          disabled={busy}
-          onClick={() => void exportDrop()}
-        >
-          {busy ? "Encrypting…" : "Generate encrypted Drop .html"}
-        </Button>
-        {note && <p className="font-mono text-[11px] text-text-muted">{note}</p>}
+        <p className="font-mono text-xs text-text-muted">
+          {secs}s · {formatBytes(result.blob.size)} · .{ext}
+        </p>
+
+        <IntegrityPanel output={result.blob} outputLabel="Recording" />
+
+        <div className="flex gap-3">
+          <Button
+            className="flex-1"
+            onClick={() => download(result.blob, `veilzero-${Date.now()}.${ext}`)}
+          >
+            {COPY.export} raw
+          </Button>
+          <Button variant="secondary" onClick={discardAndBurn}>
+            Burn clip
+          </Button>
+        </div>
+
+        <div className="rounded-lg border border-border bg-surface-alt p-3 space-y-3">
+          <p className="font-mono text-[11px] uppercase tracking-wide text-primary">
+            Resistance drop · encrypt &amp; burn
+          </p>
+
+          <div className="grid grid-cols-3 gap-2 text-xs font-mono">
+            {(
+              [
+                ["standard", "Standard"],
+                ["family_pulse", "Family pulse"],
+                ["evidence", "Evidence"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setPreset(id)}
+                className={`p-1.5 rounded border ${
+                  preset === id
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border text-text-muted"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {preset === "family_pulse" && (
+            <div className="space-y-2 text-xs font-mono">
+              <input
+                type="text"
+                value={level}
+                onChange={(e) => setLevel(e.target.value)}
+                placeholder="Level / location"
+                className="w-full rounded border border-border bg-bg px-2.5 py-1.5 outline-none"
+              />
+              <input
+                type="text"
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                placeholder="Family status"
+                className="w-full rounded border border-border bg-bg px-2.5 py-1.5 outline-none"
+              />
+            </div>
+          )}
+
+          {preset === "evidence" && (
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full rounded border border-border bg-bg px-2.5 py-1.5 text-xs font-mono outline-none text-text"
+            >
+              {EVIDENCE_OPTIONS.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          )}
+
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Shared passphrase"
+            className="w-full rounded border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-primary"
+          />
+
+          <Button
+            className="w-full"
+            variant="secondary"
+            disabled={busy}
+            onClick={() => void exportDrop()}
+          >
+            {busy ? "Encrypting…" : "Generate encrypted drop .html"}
+          </Button>
+          {note && <p className="font-mono text-[11px] text-text-muted">{note}</p>}
+        </div>
       </div>
     </Modal>
   );

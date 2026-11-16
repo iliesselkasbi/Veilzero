@@ -4,69 +4,150 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 type Landmarks = { x: number; y: number; z?: number }[];
 
+type FaceMeshInstance = {
+  setOptions: (opts: Record<string, unknown>) => void;
+  onResults: (cb: (r: { multiFaceLandmarks?: Landmarks[] }) => void) => void;
+  send: (input: { image: HTMLVideoElement }) => Promise<void>;
+  close?: () => void;
+};
+
+type FaceMeshCtor = new (config: {
+  locateFile: (file: string) => string;
+}) => FaceMeshInstance;
+
+declare global {
+  interface Window {
+    FaceMesh?: FaceMeshCtor;
+  }
+}
+
+const SCRIPT_SRC = "/mediapipe/face_mesh.js";
+
+function loadFaceMeshScript(): Promise<FaceMeshCtor> {
+  if (typeof window !== "undefined" && window.FaceMesh) {
+    return Promise.resolve(window.FaceMesh);
+  }
+
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>(
+      `script[data-veilzero="face-mesh"]`
+    );
+
+    const done = () => {
+      if (window.FaceMesh) resolve(window.FaceMesh);
+      else reject(new Error("FaceMesh global missing after script load"));
+    };
+
+    if (existing) {
+      if (window.FaceMesh) done();
+      else existing.addEventListener("load", done, { once: true });
+      existing.addEventListener(
+        "error",
+        () => reject(new Error(`Failed to load ${SCRIPT_SRC}`)),
+        { once: true }
+      );
+      return;
+    }
+
+    const s = document.createElement("script");
+    s.src = SCRIPT_SRC;
+    s.async = true;
+    s.dataset.veilzero = "face-mesh";
+    s.onload = () => done();
+    s.onerror = () => reject(new Error(`Failed to load ${SCRIPT_SRC}`));
+    document.head.appendChild(s);
+  });
+}
+
 /**
- * Runs MediaPipe FaceMesh on a <video> element. The model files are loaded
- * from the npm package's own assets (self-hosted via the CDN-free path below),
- * and all inference happens on-device.
+ * MediaPipe FaceMesh on a <video>. Model + wasm load from /public/mediapipe
+ * (offline / blackout safe). No webpack dynamic import — avoids ChunkLoadError.
  *
- * `faces` is a ref so the render loop can read it every frame without React re-renders.
- * `lastSeen` is the timestamp of the most recent frame that contained a face.
+ * `faces` / `lastSeen` are refs so the draw loop can read them without re-renders.
  */
-export function useFaceMesh(videoRef: React.RefObject<HTMLVideoElement>, enabled: boolean) {
+export function useFaceMesh(
+  videoRef: React.RefObject<HTMLVideoElement | null>,
+  enabled: boolean
+) {
   const faces = useRef<Landmarks[]>([]);
   const lastSeen = useRef<number>(0);
   const [ready, setReady] = useState(false);
-  const meshRef = useRef<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  const meshRef = useRef<FaceMeshInstance | null>(null);
   const rafRef = useRef<number>(0);
 
   const teardown = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
-    meshRef.current?.close?.();
+    rafRef.current = 0;
+    try {
+      meshRef.current?.close?.();
+    } catch {
+      /* ignore */
+    }
     meshRef.current = null;
     faces.current = [];
     setReady(false);
   }, []);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      teardown();
+      return;
+    }
+
     let cancelled = false;
 
     (async () => {
-      const { FaceMesh } = await import("@mediapipe/face_mesh");
-      if (cancelled) return;
-      const mesh = new FaceMesh({
-        // Self-hosted: copy node_modules/@mediapipe/face_mesh/* to /public/mediapipe/
-        locateFile: (file: string) => `/mediapipe/${file}`,
-      });
-      mesh.setOptions({
-        maxNumFaces: 4,
-        refineLandmarks: false,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5,
-      });
-      mesh.onResults((r: any) => {
-        const list: Landmarks[] = r.multiFaceLandmarks ?? [];
-        faces.current = list;
-        if (list.length) lastSeen.current = performance.now();
-      });
-      meshRef.current = mesh;
-      setReady(true);
+      try {
+        setError(null);
+        const FaceMesh = await loadFaceMeshScript();
+        if (cancelled) return;
 
-      let busy = false;
-      const tick = async () => {
-        const v = videoRef.current;
-        if (v && v.readyState >= 2 && !busy) {
-          busy = true;
-          try {
-            await mesh.send({ image: v });
-          } catch {
-            /* skip frame */
+        const mesh = new FaceMesh({
+          // Files copied from node_modules/@mediapipe/face_mesh → public/mediapipe/
+          locateFile: (file: string) => `/mediapipe/${file}`,
+        });
+
+        mesh.setOptions({
+          maxNumFaces: 4,
+          refineLandmarks: false,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5,
+        });
+
+        mesh.onResults((r) => {
+          const list: Landmarks[] = r.multiFaceLandmarks ?? [];
+          faces.current = list;
+          if (list.length) lastSeen.current = performance.now();
+        });
+
+        meshRef.current = mesh;
+        if (!cancelled) setReady(true);
+
+        let busy = false;
+        const tick = async () => {
+          if (cancelled) return;
+          const v = videoRef.current;
+          if (v && v.readyState >= 2 && !busy && meshRef.current) {
+            busy = true;
+            try {
+              await meshRef.current.send({ image: v });
+            } catch {
+              /* skip frame */
+            }
+            busy = false;
           }
-          busy = false;
+          rafRef.current = requestAnimationFrame(tick);
+        };
+        tick();
+      } catch (e) {
+        if (!cancelled) {
+          const msg = e instanceof Error ? e.message : "FaceMesh failed to init";
+          setError(msg);
+          setReady(false);
+          console.error("[VEILZERO] FaceMesh:", e);
         }
-        rafRef.current = requestAnimationFrame(tick);
-      };
-      tick();
+      }
     })();
 
     return () => {
@@ -75,5 +156,5 @@ export function useFaceMesh(videoRef: React.RefObject<HTMLVideoElement>, enabled
     };
   }, [enabled, videoRef, teardown]);
 
-  return { faces, lastSeen, ready };
+  return { faces, lastSeen, ready, error };
 }

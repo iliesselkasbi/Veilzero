@@ -2,25 +2,25 @@ export interface Threat {
   title: string;
   body: string;
 }
-
-export const THREATS: Threat[] = [
+export const THREATS = [
   {
     title: "Your face",
-    body: "Facial recognition can match a face in a video to a profile from a single frame. VEILZERO covers the face before the video is ever saved or sent.",
+    body: "A single clear frame can be matched to another photo or ID. VEILZERO covers faces in the live feed on your device before you save or export a clip.",
   },
   {
     title: "Your voice",
-    body: "Voiceprints are as distinctive as fingerprints. VEILZERO shifts pitch and timbre so the recording no longer matches your natural voice.",
+    body: "Voices can be matched like fingerprints. VEILZERO distorts pitch and timbre in the browser so a recording is less useful as a voiceprint.",
   },
   {
     title: "Your files",
-    body: "Photos and documents quietly carry GPS coordinates, device models, timestamps, author names and software versions. VEILZERO removes them.",
+    body: "Photos often hide GPS, phone/camera model, software name, and times. VEILZERO strips those identifying tags locally. Basic size/color tags are marked structural (safe).",
   },
 ];
 
-export const LIMITS: string[] = [
-  "VEILZERO reduces identifying signals. It does not guarantee anonymity.",
-  "Background details, clothing, gait, speech patterns and what you say can still identify you.",
-  "Pixel content of images and audio content is never altered in Clean mode. Only embedded metadata is removed.",
-  "Voice distortion can be partially reversed by determined analysis. Treat it as one layer, not the only one.",
+export const LIMITS = [
+  "VEILZERO lowers risk. It does not make you anonymous in every situation.",
+  "Clothes, background landmarks, how you walk, and the words you say can still identify you.",
+  "Clean mode focuses on embedded metadata (and safe re-encoding). It is not a full guarantee against every hidden watermark.",
+  "Voice distortion is one layer. A lab with time may still try to reverse parts of it.",
+  "Encrypted Drops are only as safe as your passphrase. Use Burn View when you are done reading.",
 ];

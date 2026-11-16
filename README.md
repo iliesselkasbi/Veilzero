@@ -12,6 +12,7 @@ Browser-based anti-surveillance toolkit. Cloaks your face, distorts your voice a
 ```bash
 npm ci             # postinstall copies MediaPipe model files to public/mediapipe
 npm run dev
+npm run build && npm run start # use this to see production version of the application and offline running.
 ```
 
 Open http://localhost:3000. Camera and mic need `localhost` or HTTPS.
