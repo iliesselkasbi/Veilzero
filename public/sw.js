@@ -114,10 +114,10 @@ async function networkFirst(req) {
       <p>This device has no cached shell yet (or cache was cleared).</p>
       <p><strong>What to do</strong></p>
       <p>1. Go online and start the app once:</p>
-      <p><code>npm run build && npm run start</code></p>
-      <p>2. Open <code>/</code>, <code>/live</code>, <code>/clean</code>, <code>/about</code> once.</p>
-      <p>3. Wait until the status bar shows offline-ready / SW active.</p>
-      <p>4. You can then disconnect. Media still never uploads — it never left the machine.</p>
+      <p><code>npm run demo</code></p>
+      <p>2. Open Witness Cam (turn on the camera once), Evidence Scrub, About Page once.</p>
+      <p>3. You can then disconnect from the network. Media still never uploads — it never left the machine.</p>
+      <p>4. Avoid hitting the Red Burn Buttons or refreshing the page until network is online to stay operational.
       <p style="margin-top:1rem;color:#666">Dev mode (<code>npm run dev</code>) does not keep an offline shell on purpose.</p>
     </div>
   </body>
