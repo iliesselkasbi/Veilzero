@@ -14,7 +14,7 @@ VEILZERO is a 100% client-side anti-surveillance toolkit built to keep working w
 | **Evidence Scrub** | `/clean` | Strips identifying metadata (GPS, device, author, timestamps) while keeping safe structural tags (dimensions, bit depth). Includes local SHA-256 integrity hashing. |
 | **Resistance Drop** | `/live` & `/clean` | Seals media into a self-contained, password-protected HTML file using **AES-256-GCM**. Opens offline and features a one-click **Burn View** wipe. |
 | **Blackout Mode** | Global | Production PWA + Service Worker caches the app shell and ML models so the toolkit runs completely offline. |
-| **Global Burn & HUD** | Global | Live corner telemetry (`OFF-GRID ACTIVE | 0 EXT REQ`) and a navigation **BURN** button that wipes session state and revokes object URLs. |
+| **Global Burn & HUD** | Global | Live corner telemetry (`● ZERO-TRUST SECURE \| 0 EXT REQ`) and a navigation **BURN** button that wipes session state and revokes object URLs. |
 
 ---
 
