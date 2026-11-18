@@ -14,6 +14,7 @@ export interface VoiceChain {
   setPreset: (p: AudioPreset) => void;
   setMuted: (m: boolean) => void;
   analyser: AnalyserNode;
+  inputAnalyser: AnalyserNode;
   dispose: () => void;
 }
 
@@ -37,9 +38,14 @@ function makeTables(ctx: AudioContext, shift: number) {
 export function createVoiceChain(input: MediaStream, preset: AudioPreset): VoiceChain {
   const AC = window.AudioContext || (window as any).webkitAudioContext;
   const ctx: AudioContext = new AC();
+  if (ctx.state === "suspended") {
+    void ctx.resume().catch(() => undefined);
+  }
   const src = ctx.createMediaStreamSource(input);
   const dest = ctx.createMediaStreamDestination();
-
+  const inputAnalyser = ctx.createAnalyser();
+  inputAnalyser.fftSize = 512;
+  src.connect(inputAnalyser);
   const hp = ctx.createBiquadFilter();
   hp.type = "highpass";
   hp.frequency.value = 90;
@@ -81,11 +87,11 @@ export function createVoiceChain(input: MediaStream, preset: AudioPreset): Voice
   // ---- Formant shaping ----------------------------------------------------
   const f1 = ctx.createBiquadFilter();
   f1.type = "peaking";
-  f1.Q.value = 2;
+  f1.Q.value = 1.6;
   f1.gain.value = 6;
   const f2 = ctx.createBiquadFilter();
   f2.type = "peaking";
-  f2.Q.value = 2;
+  f2.Q.value = 1.6;
   f2.gain.value = 5;
   shifted.connect(f1);
   f1.connect(f2);
@@ -107,12 +113,23 @@ export function createVoiceChain(input: MediaStream, preset: AudioPreset): Voice
   const comp = ctx.createDynamicsCompressor();
   const out = ctx.createGain();
   const analyser = ctx.createAnalyser();
-  analyser.fftSize = 256;
+  analyser.fftSize = 512;
   dry.connect(comp);
   wet.connect(comp);
   comp.connect(out);
   out.connect(analyser);
   out.connect(dest);
+
+  const randomScale = () => {
+    const value = new Uint32Array(1);
+    if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+      crypto.getRandomValues(value);
+      return 0.94 + (value[0] / 0xffffffff) * 0.12;
+    }
+    return 0.94 + Math.random() * 0.12;
+  };
+  const formantOneScale = randomScale();
+  const formantTwoScale = randomScale();
 
   const apply = (p: AudioPreset) => {
     const t = ctx.currentTime;
@@ -128,8 +145,8 @@ export function createVoiceChain(input: MediaStream, preset: AudioPreset): Voice
       v.depth.gain.setTargetAtTime(up ? -WINDOW : WINDOW, t, 0.05);
       v.delay.delayTime.setTargetAtTime(up ? WINDOW : 0, t, 0.05);
     }
-    f1.frequency.setTargetAtTime(500 + p.formant * 900, t, 0.05);
-    f2.frequency.setTargetAtTime(1800 + p.formant * 1600, t, 0.05);
+    f1.frequency.setTargetAtTime((500 + p.formant * 900) * formantOneScale, t, 0.05);
+    f2.frequency.setTargetAtTime((1800 + p.formant * 1600) * formantTwoScale, t, 0.05);
     wet.gain.setTargetAtTime(p.texture, t, 0.05);
     dry.gain.setTargetAtTime(1 - p.texture * 0.6, t, 0.05);
   };
@@ -138,6 +155,7 @@ export function createVoiceChain(input: MediaStream, preset: AudioPreset): Voice
   return {
     stream: dest.stream,
     analyser,
+    inputAnalyser,
     setPreset: apply,
     setMuted: (m: boolean) => out.gain.setTargetAtTime(m ? 0 : 1, ctx.currentTime, 0.02),
     dispose: () => {

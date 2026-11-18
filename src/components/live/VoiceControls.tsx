@@ -11,10 +11,19 @@ interface Props {
   muted: boolean;
   onMuted: (m: boolean) => void;
   analyser: AnalyserNode | null;
+  inputAnalyser: AnalyserNode | null;
   active: boolean;
 }
 
-export default function VoiceControls({ preset, onPreset, muted, onMuted, analyser, active }: Props) {
+export default function VoiceControls({
+  preset,
+  onPreset,
+  muted,
+  onMuted,
+  analyser,
+  inputAnalyser,
+  active,
+}: Props) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -44,7 +53,11 @@ export default function VoiceControls({ preset, onPreset, muted, onMuted, analys
           </button>
         ))}
       </div>
-      <VoiceProcessor analyser={analyser} />
+      <VoiceProcessor inputAnalyser={inputAnalyser} outputAnalyser={analyser} />
+      <p className="text-xs leading-relaxed text-text-muted">
+        Timbral filtering and pitch shifting vary per recording session. This is not LPC voiceprint removal and is not
+        guaranteed to prevent voice identification.
+      </p>
       <label className="flex items-center gap-2 text-sm text-text-muted">
         <input type="checkbox" checked={muted} onChange={(e) => onMuted(e.target.checked)} />
         Mute audio in recording

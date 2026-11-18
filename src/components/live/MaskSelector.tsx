@@ -4,8 +4,8 @@ import type { MaskId } from "@/types/stream";
 export default function MaskSelector({ value, onChange }: { value: MaskId; onChange: (m: MaskId) => void }) {
   return (
     <fieldset>
-      <legend className="mb-2 text-sm text-text-muted">Mask</legend>
-      <div className="grid grid-cols-5 gap-2">
+      <legend className="mb-2 text-sm text-text-muted">Face mode</legend>
+      <div className="grid grid-cols-3 gap-2">
         {MASKS.map((m) => (
           <button
             key={m.id}

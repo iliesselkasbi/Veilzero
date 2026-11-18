@@ -1,5 +1,6 @@
 import type { MaskId } from "@/types/stream";
 import { FACE_OVAL, boundingBox, expand, toPixels, tracePath } from "./canvasUtils";
+import type { FaceWarper } from "./faceWarp";
 
 type Landmarks = { x: number; y: number; z?: number }[];
 
@@ -11,6 +12,8 @@ export interface DrawOptions {
   faces: Landmarks[];
   mask: MaskId;
   images: Partial<Record<MaskId, HTMLImageElement>>;
+  triangleIndices: number[];
+  warper: FaceWarper | null;
   /** True when no face is currently tracked. Frame is then fully obscured. */
   failClosed: boolean;
 }
@@ -23,7 +26,7 @@ export interface DrawOptions {
  * leaking an unmasked face.
  */
 export function drawFrame(o: DrawOptions) {
-  const { ctx, video, width, height, faces, mask, images, failClosed } = o;
+  const { ctx, video, width, height, faces, mask, images, triangleIndices, warper, failClosed } = o;
   ctx.clearRect(0, 0, width, height);
 
   if (failClosed) {
@@ -39,6 +42,13 @@ export function drawFrame(o: DrawOptions) {
   for (const lm of faces) {
     const oval = toPixels(lm, FACE_OVAL, width, height);
     const box = expand(boundingBox(oval), 0.18);
+
+    if (mask === "ghost") {
+      tracePath(ctx, oval);
+      ctx.fillStyle = "#0A0A0A";
+      ctx.fill();
+      continue;
+    }
 
     if (mask === "blur") {
       ctx.save();
@@ -76,6 +86,10 @@ export function drawFrame(o: DrawOptions) {
       ctx.fillStyle = "#0A0A0A";
       ctx.fill();
     }
+  }
+
+  if (mask === "ghost" && warper?.render(video as HTMLVideoElement, faces, triangleIndices, width, height)) {
+    ctx.drawImage(warper.canvas, 0, 0, width, height);
   }
 }
 

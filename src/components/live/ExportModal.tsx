@@ -17,6 +17,7 @@ interface Props {
 
 export default function ExportModal({ result, open, onClose, onDiscard }: Props) {
   const [password, setPassword] = useState("");
+  const [stealth, setStealth] = useState(true);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
 
@@ -27,8 +28,8 @@ export default function ExportModal({ result, open, onClose, onDiscard }: Props)
 
   async function exportDrop() {
     if (!recording) return;
-    if (!password || password.length < 4) {
-      setNote("Password must be at least 4 characters.");
+    if (!password || password.length < 12) {
+      setNote("Passphrase must be at least 12 characters.");
       return;
     }
     setBusy(true);
@@ -39,6 +40,7 @@ export default function ExportModal({ result, open, onClose, onDiscard }: Props)
         fileName: `veilzero-live-${Date.now()}.${ext}`,
         password,
         kind: "live",
+        stealth,
       });
       download(html, `veilzero-drop-${Date.now()}.html`);
       setNote("Drop ready. Send passphrase on a different channel.");
@@ -59,6 +61,9 @@ export default function ExportModal({ result, open, onClose, onDiscard }: Props)
       <p className="mt-1 text-xs text-text-muted">
         Cloaked canvas + destroyed voice only. Raw camera/mic never touched disk.
       </p>
+      {recording.blob.size > 250 * 1024 * 1024 && (
+        <p className="mt-2 text-xs text-danger">Large recording: {formatBytes(recording.blob.size)}. Exporting may be slow or exceed device storage.</p>
+      )}
 
       <div className="mt-5 flex gap-3">
         <Button
@@ -80,8 +85,20 @@ export default function ExportModal({ result, open, onClose, onDiscard }: Props)
 
       <div className="mt-4 rounded-lg border border-border bg-surface-alt p-3 space-y-2">
         <p className="font-mono text-[11px] uppercase tracking-wide text-primary">
-          Resistance Drop · Encrypt &amp; Burn
+          Resistance Drop · Encrypted export
         </p>
+        <label className="flex items-start gap-2 text-xs text-text-muted">
+          <input
+            type="checkbox"
+            checked={stealth}
+            onChange={(e) => setStealth(e.target.checked)}
+            className="mt-0.5 accent-primary"
+          />
+          <span>
+            Stealth drop — hide filename and metadata until unlocked
+            {!stealth && " (normal mode keeps these visible without the passphrase)"}
+          </span>
+        </label>
         <input
           type="password"
           value={password}

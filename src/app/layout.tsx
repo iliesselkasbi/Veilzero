@@ -3,6 +3,9 @@ import "./globals.css";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import GlobalMonitor from "@/components/layout/GlobalMonitor";
+import ServiceWorker from "@/components/layout/ServiceWorker";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "VEILZERO — Be seen. Not identified.",
@@ -29,6 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         {/* The Zero-Trust HUD */}
         <GlobalMonitor />
+        <ServiceWorker />
       </body>
     </html>
   );

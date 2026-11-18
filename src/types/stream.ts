@@ -1,4 +1,4 @@
-export type MaskId = "void" | "skull" | "static" | "glitch" | "blur";
+export type MaskId = "void" | "ghost" | "skull" | "static" | "glitch" | "blur";
 
 export interface MaskConfig {
   id: MaskId;

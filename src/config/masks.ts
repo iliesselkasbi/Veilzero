@@ -2,6 +2,7 @@ import type { MaskConfig } from "@/types/stream";
 
 export const MASKS: MaskConfig[] = [
   { id: "void", label: "Void", src: "/masks/void.svg" },
+  { id: "ghost", label: "Ghost", src: null },
   { id: "skull", label: "Skull", src: "/masks/skull.svg" },
   { id: "static", label: "Static", src: "/masks/static.svg" },
   { id: "glitch", label: "Glitch", src: "/masks/glitch.svg" },

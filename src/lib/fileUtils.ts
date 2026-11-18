@@ -15,10 +15,15 @@ export function formatBytes(n: number): string {
   return `${(n / 1024 / 1024).toFixed(2)} MB`;
 }
 
-export function cleanName(name: string): string {
+export function cleanName(name: string, type?: string): string {
   const i = name.lastIndexOf(".");
-  if (i <= 0) return `${name}_clean`;
-  return `${name.slice(0, i)}_clean${name.slice(i)}`;
+  const base = i <= 0 ? name : name.slice(0, i);
+  const knownExtension =
+    type === "image/jpeg" ? ".jpg" :
+    type === "image/png" ? ".png" :
+    type === "image/webp" ? ".webp" :
+    i <= 0 ? "" : name.slice(i);
+  return `${base}_clean${knownExtension}`;
 }
 
 export function download(blob: Blob, fileName: string) {

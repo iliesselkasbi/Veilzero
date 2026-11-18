@@ -10,6 +10,7 @@ export function useVoice(mic: MediaStream | null) {
   const [preset, setPresetState] = useState<AudioPreset>(DEFAULT_AUDIO_PRESET);
   const [processed, setProcessed] = useState<MediaStream | null>(null);
   const [muted, setMutedState] = useState(false);
+  const mutedRef = useRef(false);
   const presetRef = useRef(preset);
   presetRef.current = preset;
 
@@ -19,6 +20,7 @@ export function useVoice(mic: MediaStream | null) {
       return;
     }
     const c = createVoiceChain(mic, presetRef.current);
+    c.setMuted(mutedRef.current);
     chain.current = c;
     setProcessed(c.stream);
     return () => {
@@ -34,9 +36,18 @@ export function useVoice(mic: MediaStream | null) {
   };
 
   const setMuted = (m: boolean) => {
+    mutedRef.current = m;
     setMutedState(m);
     chain.current?.setMuted(m);
   };
 
-  return { processed, preset, setPreset, muted, setMuted, analyser: chain.current?.analyser ?? null };
+  return {
+    processed,
+    preset,
+    setPreset,
+    muted,
+    setMuted,
+    analyser: chain.current?.analyser ?? null,
+    inputAnalyser: chain.current?.inputAnalyser ?? null,
+  };
 }

@@ -23,7 +23,7 @@ export default function LivePage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cam = useCamera();
   const cameraOn = cam.status === "active";
-  const { faces, lastSeen, ready } = useFaceMesh(cam.videoRef, cameraOn);
+  const { faces, triangleIndices, lastSeen, ready, initError } = useFaceMesh(cam.videoRef, cameraOn);
   const images = useMaskImages();
   const voice = useVoice(cam.micStream);
   const rec = useRecorder(canvasRef, voice.processed);
@@ -74,6 +74,7 @@ export default function LivePage() {
               canvasRef={canvasRef}
               videoRef={cam.videoRef}
               faces={faces}
+              triangleIndices={triangleIndices}
               lastSeen={lastSeen}
               images={images}
               meshReady={ready}
@@ -113,6 +114,7 @@ export default function LivePage() {
             </p>
           )}
           {rec.error && <p className="text-sm text-danger">{COPY.error}</p>}
+          {initError && <p className="text-sm text-danger">Face masking could not initialize: {initError}</p>}
         </div>
 
         <Card className="space-y-6 self-start">
@@ -124,6 +126,7 @@ export default function LivePage() {
             muted={voice.muted}
             onMuted={voice.setMuted}
             analyser={voice.analyser}
+            inputAnalyser={voice.inputAnalyser}
             active={!!voice.processed}
           />
         </Card>

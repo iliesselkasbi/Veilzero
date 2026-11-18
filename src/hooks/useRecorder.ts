@@ -9,9 +9,11 @@ import type { RecordingResult } from "@/types/stream";
  * Records the *processed* canvas + processed audio. The raw camera and raw mic
  * tracks are never given to MediaRecorder.
  */
-export function useRecorder(canvasRef: React.RefObject<HTMLCanvasElement>, audio: MediaStream | null) {
+export function useRecorder(canvasRef: React.RefObject<HTMLCanvasElement | null>, audio: MediaStream | null) {
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
+  const outputStream = useRef<MediaStream | null>(null);
+  const maxDuration = useRef<number | null>(null);
   const startedAt = useRef(0);
   const [recording, setRecording] = useState(false);
   const [result, setResult] = useState<RecordingResult | null>(null);
@@ -22,11 +24,13 @@ export function useRecorder(canvasRef: React.RefObject<HTMLCanvasElement>, audio
     if (!canvas) return;
     try {
       const out = canvas.captureStream(RECORD_FPS);
+      outputStream.current = out;
       audio?.getAudioTracks().forEach((t) => out.addTrack(t));
       const mime = pickRecorderMime();
       const rec = new MediaRecorder(out, mime ? { mimeType: mime, videoBitsPerSecond: 4_000_000 } : undefined);
       chunks.current = [];
       rec.ondataavailable = (e) => e.data.size && chunks.current.push(e.data);
+      rec.onerror = () => setError(true);
       rec.onstop = () => {
         const type = rec.mimeType || "video/webm";
         const blob = new Blob(chunks.current, { type });
@@ -37,14 +41,25 @@ export function useRecorder(canvasRef: React.RefObject<HTMLCanvasElement>, audio
           durationMs: performance.now() - startedAt.current,
         });
         setRecording(false);
+        if (maxDuration.current !== null) {
+          window.clearTimeout(maxDuration.current);
+          maxDuration.current = null;
+        }
+        outputStream.current?.getTracks().forEach((t) => t.stop());
+        outputStream.current = null;
       };
       rec.start(250);
+      maxDuration.current = window.setTimeout(() => {
+        if (rec.state !== "inactive") rec.stop();
+      }, 10 * 60 * 1000);
       startedAt.current = performance.now();
       recorder.current = rec;
       setResult(null);
       setError(false);
       setRecording(true);
     } catch {
+      outputStream.current?.getTracks().forEach((track) => track.stop());
+      outputStream.current = null;
       setError(true);
     }
   }, [canvasRef, audio]);

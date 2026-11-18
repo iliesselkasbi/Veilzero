@@ -12,10 +12,12 @@ type Landmarks = { x: number; y: number; z?: number }[];
  * `faces` is a ref so the render loop can read it every frame without React re-renders.
  * `lastSeen` is the timestamp of the most recent frame that contained a face.
  */
-export function useFaceMesh(videoRef: React.RefObject<HTMLVideoElement>, enabled: boolean) {
+export function useFaceMesh(videoRef: React.RefObject<HTMLVideoElement | null>, enabled: boolean) {
   const faces = useRef<Landmarks[]>([]);
+  const triangleIndices = useRef<number[]>([]);
   const lastSeen = useRef<number>(0);
   const [ready, setReady] = useState(false);
+  const [initError, setInitError] = useState<string | null>(null);
   const meshRef = useRef<any>(null);
   const rafRef = useRef<number>(0);
 
@@ -32,14 +34,25 @@ export function useFaceMesh(videoRef: React.RefObject<HTMLVideoElement>, enabled
     let cancelled = false;
 
     (async () => {
-      const { FaceMesh } = await import("@mediapipe/face_mesh");
+      setInitError(null);
+      try {
+      const { FaceMesh, FACEMESH_TESSELATION } = await import("@mediapipe/face_mesh");
       if (cancelled) return;
+      triangleIndices.current = [];
+      for (let i = 0; i + 2 < FACEMESH_TESSELATION.length; i += 3) {
+        const [a, b] = FACEMESH_TESSELATION[i];
+        const [nextB, c] = FACEMESH_TESSELATION[i + 1];
+        const [nextC, nextA] = FACEMESH_TESSELATION[i + 2];
+        if (b === nextB && c === nextC && a === nextA) {
+          triangleIndices.current.push(a, b, c);
+        }
+      }
       const mesh = new FaceMesh({
         // Self-hosted: copy node_modules/@mediapipe/face_mesh/* to /public/mediapipe/
         locateFile: (file: string) => `/mediapipe/${file}`,
       });
       mesh.setOptions({
-        maxNumFaces: 4,
+        maxNumFaces: 10,
         refineLandmarks: false,
         minDetectionConfidence: 0.5,
         minTrackingConfidence: 0.5,
@@ -67,6 +80,9 @@ export function useFaceMesh(videoRef: React.RefObject<HTMLVideoElement>, enabled
         rafRef.current = requestAnimationFrame(tick);
       };
       tick();
+      } catch (error) {
+        setInitError(error instanceof Error ? error.message : "FaceMesh initialization failed");
+      }
     })();
 
     return () => {
@@ -75,5 +91,5 @@ export function useFaceMesh(videoRef: React.RefObject<HTMLVideoElement>, enabled
     };
   }, [enabled, videoRef, teardown]);
 
-  return { faces, lastSeen, ready };
+  return { faces, triangleIndices, lastSeen, ready, initError };
 }

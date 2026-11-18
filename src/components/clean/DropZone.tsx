@@ -24,7 +24,7 @@ export default function DropZone({ onFile }: { onFile: (f: File) => void }) {
         ref={input}
         type="file"
         className="hidden"
-        accept="image/*,video/mp4,video/quicktime,audio/mp4,audio/x-m4a"
+        accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp,video/mp4,video/quicktime,audio/mp4,audio/x-m4a"
         onChange={(e) => {
           const f = e.target.files?.[0];
           if (f) onFile(f);

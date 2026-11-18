@@ -2,15 +2,17 @@
 
 import { useEffect, useRef } from "react";
 import { drawFrame } from "@/lib/facemask";
+import { FaceWarper } from "@/lib/faceWarp";
 import type { MaskId } from "@/types/stream";
 import { VIDEO_HEIGHT, VIDEO_WIDTH } from "@/lib/constants";
 
 type Landmarks = { x: number; y: number; z?: number }[];
 
 interface Props {
-  canvasRef: React.RefObject<HTMLCanvasElement>;
-  videoRef: React.RefObject<HTMLVideoElement>;
+  canvasRef: React.RefObject<HTMLCanvasElement | null>;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
   faces: React.MutableRefObject<Landmarks[]>;
+  triangleIndices: React.MutableRefObject<number[]>;
   lastSeen: React.MutableRefObject<number>;
   images: React.MutableRefObject<Partial<Record<MaskId, HTMLImageElement>>>;
   meshReady: boolean;
@@ -26,6 +28,7 @@ export default function StreamCanvas({
   canvasRef,
   videoRef,
   faces,
+  triangleIndices,
   lastSeen,
   images,
   meshReady,
@@ -34,10 +37,13 @@ export default function StreamCanvas({
   onTrackingChange,
 }: Props) {
   const everLocked = useRef(false);
+  const warperRef = useRef<FaceWarper | null>(null);
 
   useEffect(() => {
     if (!active) {
       everLocked.current = false;
+      warperRef.current?.dispose();
+      warperRef.current = null;
       return;
     }
     let raf = 0;
@@ -73,7 +79,11 @@ export default function StreamCanvas({
 
         const faceCount = faces.current?.length ?? 0;
         const recent = performance.now() - lastSeen.current < LOST_MS;
-        const tracking = meshReady && faceCount > 0 && recent;
+        const tracking =
+          meshReady &&
+          faceCount > 0 &&
+          faceCount < 10 &&
+          recent;
 
         if (tracking) everLocked.current = true;
 
@@ -91,12 +101,17 @@ export default function StreamCanvas({
               : "KILLSWITCH ENGAGED"
           );
         } else {
+          if (mask === "ghost" && !warperRef.current) {
+            warperRef.current = new FaceWarper();
+          }
           drawFrame({
             ctx,
             video: v,
             width: w,
             height: h,
             faces: faces.current,
+            triangleIndices: triangleIndices.current,
+            warper: warperRef.current,
             mask,
             images: images.current,
             failClosed: false,
@@ -113,7 +128,15 @@ export default function StreamCanvas({
 
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [active, mask, meshReady, canvasRef, videoRef, faces, lastSeen, images, onTrackingChange]);
+  }, [active, mask, meshReady, canvasRef, videoRef, faces, triangleIndices, lastSeen, images, onTrackingChange]);
+
+  useEffect(
+    () => () => {
+      warperRef.current?.dispose();
+      warperRef.current = null;
+    },
+    []
+  );
 
   return (
     <canvas

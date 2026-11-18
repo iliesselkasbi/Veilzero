@@ -14,11 +14,13 @@ export function useCamera() {
   const start = useCallback(async () => {
     setStatus("loading");
     setDenied(false);
+    let acquired: MediaStream | null = null;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: VIDEO_WIDTH }, height: { ideal: VIDEO_HEIGHT }, facingMode: "user" },
         audio: { echoCancellation: true, noiseSuppression: true },
       });
+      acquired = stream;
       streamRef.current = stream;
       const v = videoRef.current;
       if (v) {
@@ -29,6 +31,9 @@ export function useCamera() {
       setMicStream(new MediaStream(stream.getAudioTracks()));
       setStatus("active");
     } catch (e: any) {
+      acquired?.getTracks().forEach((track) => track.stop());
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
       setDenied(e?.name === "NotAllowedError" || e?.name === "SecurityError");
       setStatus("error");
     }

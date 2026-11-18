@@ -27,7 +27,7 @@ export default function StreamRecorder({ recording, canRecord, done, onStart, on
 
   return (
     <div className="flex items-center gap-4">
-      <RecordButton recording={recording} disabled={!canRecord} onStart={onStart} onStop={onStop} />
+      <RecordButton recording={recording} disabled={!recording && !canRecord} onStart={onStart} onStop={onStop} />
       <div>
         <p className={`font-mono text-sm ${recording ? "text-danger" : done ? "text-success" : "text-text-muted"}`}>
           {recording ? COPY.recording : done ? COPY.recordingDone : COPY.ready}

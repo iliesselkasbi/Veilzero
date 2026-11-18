@@ -16,12 +16,13 @@ export default function CleanExport({
   const threatsLeft = remaining ?? 0;
   const clean = threatsLeft === 0;
   const [password, setPassword] = useState("");
+  const [stealth, setStealth] = useState(true);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
 
   async function exportDrop() {
-    if (!password || password.length < 4) {
-      setNote("Password must be at least 4 characters.");
+    if (!password || password.length < 12) {
+      setNote("Passphrase must be at least 12 characters.");
       return;
     }
     setBusy(true);
@@ -32,6 +33,7 @@ export default function CleanExport({
         fileName: result.fileName,
         password,
         kind: "clean",
+        stealth,
       });
       download(html, `veilzero-drop-${Date.now()}.html`);
       setNote("Drop ready. Share the passphrase on a separate channel.");
@@ -53,7 +55,7 @@ export default function CleanExport({
         }`}
       >
         {clean ? (
-          <>✓ Clean export ready — 0 identifying threats detected on re-scan.</>
+          <>✓ Output differs from original. Verification found 0 threats, subject to rescan limits.</>
         ) : (
           <>
             ⚠ {threatsLeft} residual threat{threatsLeft === 1 ? "" : "s"} still flagged. Prefer a
@@ -83,11 +85,23 @@ export default function CleanExport({
 
       <div className="rounded-lg border border-border bg-surface-alt p-3 space-y-2">
         <p className="font-mono text-[11px] uppercase tracking-wide text-primary">
-          Resistance Drop · Encrypt &amp; Burn
+          Resistance Drop · Encrypted export
         </p>
         <p className="text-xs text-text-muted">
           Password-locked HTML dead-drop. Works offline. No servers.
         </p>
+        <label className="flex items-start gap-2 text-xs text-text-muted">
+          <input
+            type="checkbox"
+            checked={stealth}
+            onChange={(e) => setStealth(e.target.checked)}
+            className="mt-0.5 accent-primary"
+          />
+          <span>
+            Stealth drop — hide filename and metadata until unlocked
+            {!stealth && " (normal mode keeps these visible without the passphrase)"}
+          </span>
+        </label>
         <input
           type="password"
           value={password}

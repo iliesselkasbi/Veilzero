@@ -1,26 +1,52 @@
+const CHUNK_SIZE = 1024 * 1024;
+const AAD_PREFIX = "VEILZERO-RESISTANCE-DROP-v2:";
+
 function toBase64(bytes: Uint8Array): string {
-  let s = "";
-  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-  return btoa(s);
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return btoa(binary);
 }
 
-async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey> {
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    };
+    return entities[character];
+  });
+}
+
+async function deriveKey(
+  password: string,
+  salt: Uint8Array<ArrayBuffer>
+): Promise<CryptoKey> {
   const enc = new TextEncoder();
-  const baseKey = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, [
-    "deriveKey",
-  ]);
-  return crypto.subtle.deriveKey(
-    {
-      name: "PBKDF2",
-      salt: Uint8Array.from(salt),
-      iterations: 250_000,
-      hash: "SHA-256",
-    },
-    baseKey,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt", "decrypt"]
-  );
+  const passwordBytes = enc.encode(password);
+  try {
+    const baseKey = await crypto.subtle.importKey("raw", passwordBytes, "PBKDF2", false, [
+      "deriveKey",
+    ]);
+    return await crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt,
+        iterations: 600_000,
+        hash: "SHA-256",
+      },
+      baseKey,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"]
+    );
+  } finally {
+    passwordBytes.fill(0);
+  }
 }
 
 export async function buildResistanceDrop(opts: {
@@ -28,32 +54,96 @@ export async function buildResistanceDrop(opts: {
   fileName: string;
   password: string;
   kind: "live" | "clean";
+  stealth?: boolean;
+  meta?: Record<string, string>;
 }): Promise<Blob> {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const stealth = opts.stealth ?? true;
   const salt = crypto.getRandomValues(new Uint8Array(16));
-  const key = await deriveKey(opts.password, salt);
-  const plain = new Uint8Array(await opts.blob.arrayBuffer());
-  const cipherBuf = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plain);
-  const cipher = new Uint8Array(cipherBuf);
+  const saltText = toBase64(salt);
+  let key: CryptoKey;
+  try {
+    key = await deriveKey(opts.password, salt);
+  } finally {
+    salt.fill(0);
+  }
 
   const mime = opts.blob.type || "application/octet-stream";
-  const payload = {
-    v: 1,
+  const createdAt = new Date().toISOString();
+  const metadata = {
+    ...(opts.meta ?? {}),
     kind: opts.kind,
     fileName: opts.fileName,
     mime,
-    salt: toBase64(salt),
-    iv: toBase64(iv),
-    data: toBase64(cipher),
-    createdAt: new Date().toISOString(),
-    note: "VEILZERO Resistance Drop — assume hostile network. Verify passphrase out-of-band.",
+    createdAt,
   };
+  const ivs: string[] = [];
+  const data: string[] = [];
+  const fileChunkCount = Math.ceil(opts.blob.size / CHUNK_SIZE);
+  const chunkCount = fileChunkCount + (stealth ? 1 : 0);
+
+  async function encryptChunk(plain: Uint8Array<ArrayBuffer>, index: number): Promise<void> {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    let cipher: Uint8Array | undefined;
+    try {
+      const encrypted = await crypto.subtle.encrypt(
+        {
+          name: "AES-GCM",
+          iv,
+          additionalData: new TextEncoder().encode(`${AAD_PREFIX}${index}:${chunkCount}`),
+        },
+        key,
+        plain
+      );
+      cipher = new Uint8Array(encrypted);
+      ivs.push(toBase64(iv));
+      data.push(toBase64(cipher));
+    } finally {
+      plain.fill(0);
+      iv.fill(0);
+      cipher?.fill(0);
+    }
+  }
+
+  if (stealth) {
+    await encryptChunk(new TextEncoder().encode(JSON.stringify(metadata)), 0);
+  }
+  for (let offset = 0; offset < opts.blob.size; offset += CHUNK_SIZE) {
+    const bytes = new Uint8Array(
+      await opts.blob.slice(offset, Math.min(offset + CHUNK_SIZE, opts.blob.size)).arrayBuffer()
+    );
+    await encryptChunk(bytes, ivs.length);
+  }
+
+  const payload = {
+    v: 2,
+    salt: saltText,
+    iv: ivs,
+    data,
+    ...(stealth
+      ? {}
+      : {
+          kind: metadata.kind,
+          fileName: metadata.fileName,
+          mime: metadata.mime,
+          createdAt: metadata.createdAt,
+          meta: opts.meta ?? {},
+        }),
+  };
+  const normalDetails = stealth
+    ? ""
+    : `<p class="ok">FILE: ${escapeHtml(opts.fileName)} · ${escapeHtml(createdAt)}</p><p class="ok">METADATA: ${escapeHtml(JSON.stringify(opts.meta ?? {}))}</p>`;
+  const payloadJson = JSON.stringify(payload)
+    .replace(/&/g, "\\u0026")
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
 
   const html = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src blob:; media-src blob:; connect-src 'none'; base-uri 'none'; form-action 'none'"/>
 <title>VEILZERO · Resistance Drop</title>
 <style>
   :root { color-scheme: dark; }
@@ -76,50 +166,114 @@ export async function buildResistanceDrop(opts: {
   <div class="card">
     <h1>VEILZERO // RESISTANCE DROP</h1>
     <p>Encrypted client-side dead-drop. No servers contacted when you unlock this file.</p>
-    <p class="ok">FILE: ${opts.fileName.replace(/[<>&]/g, "")}</p>
+    ${normalDetails}
     <input id="pw" type="password" placeholder="Passphrase" autofocus />
     <button id="go">UNLOCK</button>
     <p class="err" id="err"></p>
     <div id="out"></div>
   </div>
 <script>
-const PAYLOAD = ${JSON.stringify(payload)};
-const b64 = (s) => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const PAYLOAD = ${payloadJson};
+const AAD_PREFIX = "${AAD_PREFIX}";
+const b64 = (value) => Uint8Array.from(atob(value), character => character.charCodeAt(0));
 async function derive(password, salt) {
-  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveKey"]);
-  return crypto.subtle.deriveKey(
-    { name:"PBKDF2", salt, iterations:250000, hash:"SHA-256" },
-    base,
-    { name:"AES-GCM", length:256 },
-    false,
-    ["decrypt"]
-  );
+  const passwordBytes = new TextEncoder().encode(password);
+  try {
+    const base = await crypto.subtle.importKey("raw", passwordBytes, "PBKDF2", false, ["deriveKey"]);
+    return await crypto.subtle.deriveKey(
+      { name:"PBKDF2", salt, iterations:600000, hash:"SHA-256" },
+      base,
+      { name:"AES-GCM", length:256 },
+      false,
+      ["decrypt"]
+    );
+  } finally {
+    passwordBytes.fill(0);
+  }
 }
+let objectUrl = null;
+window.addEventListener("pagehide", () => {
+  if (objectUrl) URL.revokeObjectURL(objectUrl);
+});
 document.getElementById("go").onclick = async () => {
   const err = document.getElementById("err");
   const out = document.getElementById("out");
-  err.textContent = ""; out.innerHTML = "";
+  const password = document.getElementById("pw");
+  err.textContent = "";
+  out.replaceChildren();
+  const clearChunks = [];
+  let metadataBytes;
+  let saltBytes;
   try {
-    const pw = document.getElementById("pw").value;
-    const key = await derive(pw, b64(PAYLOAD.salt));
-    const plain = await crypto.subtle.decrypt(
-      { name:"AES-GCM", iv: b64(PAYLOAD.iv) },
-      key,
-      b64(PAYLOAD.data)
-    );
-    const blob = new Blob([plain], { type: PAYLOAD.mime });
-    const url = URL.createObjectURL(blob);
-    if (PAYLOAD.mime.startsWith("video/")) {
-      out.innerHTML = '<video controls autoplay src="'+url+'"></video>';
-    } else if (PAYLOAD.mime.startsWith("image/")) {
-      out.innerHTML = '<img alt="drop" src="'+url+'"/>';
-    } else if (PAYLOAD.mime.startsWith("audio/")) {
-      out.innerHTML = '<audio controls autoplay src="'+url+'"></audio>';
-    } else {
-      out.innerHTML = '<p class="ok">Decrypted. <a style="color:#00FF41" href="'+url+'" download="'+PAYLOAD.fileName+'">Download file</a></p>';
+    saltBytes = b64(PAYLOAD.salt);
+    const key = await derive(password.value, saltBytes);
+    saltBytes.fill(0);
+    saltBytes = null;
+    for (let index = 0; index < PAYLOAD.data.length; index++) {
+      const iv = b64(PAYLOAD.iv[index]);
+      const cipher = b64(PAYLOAD.data[index]);
+      try {
+        const plain = await crypto.subtle.decrypt(
+          {
+            name:"AES-GCM",
+            iv,
+            additionalData:new TextEncoder().encode(AAD_PREFIX + index + ":" + PAYLOAD.data.length)
+          },
+          key,
+          cipher
+        );
+        clearChunks.push(new Uint8Array(plain));
+      } finally {
+        iv.fill(0);
+        cipher.fill(0);
+      }
     }
-  } catch (e) {
+
+    let header = PAYLOAD;
+    if (!PAYLOAD.meta) {
+      metadataBytes = clearChunks.shift();
+      header = JSON.parse(new TextDecoder().decode(metadataBytes));
+      metadataBytes.fill(0);
+      metadataBytes = null;
+    }
+    const blob = new Blob(clearChunks, { type:header.mime || "application/octet-stream" });
+    clearChunks.forEach(chunk => chunk.fill(0));
+    clearChunks.length = 0;
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl = URL.createObjectURL(blob);
+
+    if (header.mime.startsWith("video/")) {
+      const video = document.createElement("video");
+      video.controls = true;
+      video.autoplay = true;
+      video.src = objectUrl;
+      out.append(video);
+    } else if (header.mime.startsWith("image/")) {
+      const image = document.createElement("img");
+      image.alt = "drop";
+      image.src = objectUrl;
+      out.append(image);
+    } else if (header.mime.startsWith("audio/")) {
+      const audio = document.createElement("audio");
+      audio.controls = true;
+      audio.autoplay = true;
+      audio.src = objectUrl;
+      out.append(audio);
+    } else {
+      const link = document.createElement("a");
+      link.className = "ok";
+      link.href = objectUrl;
+      link.download = header.fileName || "resistance-drop";
+      link.textContent = "Decrypted. Download file";
+      out.append(link);
+    }
+  } catch {
+    clearChunks.forEach(chunk => chunk.fill(0));
     err.textContent = "Unlock failed. Wrong passphrase or tampered drop.";
+  } finally {
+    metadataBytes?.fill(0);
+    saltBytes?.fill(0);
+    password.value = "";
   }
 };
 </script>
