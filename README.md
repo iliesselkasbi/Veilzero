@@ -2,6 +2,9 @@
 
 **Off-grid coordination for life in the Hollow.**
 
+> **Launch Live App:** **[https://vercel.app](https://vercel.app)**  
+> *(Runs 100% client-side in your browser over HTTPS. No login, no uploads, and works offline once cached.)*
+
 VEILZERO is a 100% client-side anti-surveillance toolkit built to keep working when the uplink dies. Cloaks your face, distorts your voice, scrubs identifying file metadata, and seals exports into offline **Resistance Drops**. Nothing uploads. No accounts. Zero external requests.
 
 ---
