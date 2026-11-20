@@ -1,6 +1,26 @@
 const CHUNK_SIZE = 1024 * 1024;
 const AAD_PREFIX = "VEILZERO-RESISTANCE-DROP-v2:";
 
+export type DropPreset = "standard" | "family_pulse" | "evidence";
+
+export interface DropMetadata extends Record<string, string | undefined> {
+  preset?: DropPreset;
+  level?: string;
+  sector?: string;
+  status?: string;
+  category?: string;
+}
+
+export function evidenceLabel(id: string): string {
+  const labels: Record<string, string> = {
+    TAINTED_WATER_PROOF: "Contaminated water",
+    OUTBREAK_CLUSTER: "Lung sickness cluster",
+    SURFACE_ATMOSPHERE_SAFE: "Surface air claim",
+    BLACKOUT_AIR_CUT: "Air supply cutoff",
+  };
+  return labels[id] ?? id;
+}
+
 function toBase64(bytes: Uint8Array): string {
   let binary = "";
   for (let offset = 0; offset < bytes.length; offset += 0x8000) {
@@ -55,7 +75,7 @@ export async function buildResistanceDrop(opts: {
   password: string;
   kind: "live" | "clean";
   stealth?: boolean;
-  meta?: Record<string, string>;
+  meta?: DropMetadata;
 }): Promise<Blob> {
   const stealth = opts.stealth ?? true;
   const salt = crypto.getRandomValues(new Uint8Array(16));
@@ -69,8 +89,12 @@ export async function buildResistanceDrop(opts: {
 
   const mime = opts.blob.type || "application/octet-stream";
   const createdAt = new Date().toISOString();
+  const meta: DropMetadata = {
+    ...opts.meta,
+    preset: opts.meta?.preset ?? "standard",
+  };
   const metadata = {
-    ...(opts.meta ?? {}),
+    ...meta,
     kind: opts.kind,
     fileName: opts.fileName,
     mime,
@@ -126,12 +150,26 @@ export async function buildResistanceDrop(opts: {
           fileName: metadata.fileName,
           mime: metadata.mime,
           createdAt: metadata.createdAt,
-          meta: opts.meta ?? {},
+          meta,
         }),
   };
+  const presetTitle =
+    meta.preset === "family_pulse"
+      ? "Family pulse"
+      : meta.preset === "evidence"
+        ? "Hollow evidence"
+        : "Resistance drop";
+  const familyDetails =
+    !stealth && meta.preset === "family_pulse"
+      ? `<p class="ok">LEVEL: ${escapeHtml(meta.level ?? "Unknown level")}</p><p class="ok">STATUS: ${escapeHtml(meta.status ?? "Status unknown")}</p>`
+      : "";
+  const evidenceDetails =
+    !stealth && meta.preset === "evidence"
+      ? `<p class="ok">EVIDENCE: ${escapeHtml(evidenceLabel(meta.category ?? "Unclassified"))}</p>`
+      : "";
   const normalDetails = stealth
     ? ""
-    : `<p class="ok">FILE: ${escapeHtml(opts.fileName)} · ${escapeHtml(createdAt)}</p><p class="ok">METADATA: ${escapeHtml(JSON.stringify(opts.meta ?? {}))}</p>`;
+    : `<p class="ok">FILE: ${escapeHtml(opts.fileName)} · ${escapeHtml(createdAt)}</p><p class="ok">MODE: ${escapeHtml(presetTitle)}</p>${familyDetails}${evidenceDetails}<p class="ok">METADATA: ${escapeHtml(JSON.stringify(meta))}</p>`;
   const payloadJson = JSON.stringify(payload)
     .replace(/&/g, "\\u0026")
     .replace(/</g, "\\u003c")
@@ -144,7 +182,7 @@ export async function buildResistanceDrop(opts: {
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src blob:; media-src blob:; connect-src 'none'; base-uri 'none'; form-action 'none'"/>
-<title>VEILZERO · Resistance Drop</title>
+<title>VEILZERO · ${escapeHtml(presetTitle)}</title>
 <style>
   :root { color-scheme: dark; }
   body { margin:0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -164,7 +202,7 @@ export async function buildResistanceDrop(opts: {
 </head>
 <body>
   <div class="card">
-    <h1>VEILZERO // RESISTANCE DROP</h1>
+    <h1>VEILZERO // ${escapeHtml(presetTitle)}</h1>
     <p>Encrypted client-side dead-drop. No servers contacted when you unlock this file.</p>
     ${normalDetails}
     <input id="pw" type="password" placeholder="Passphrase" autofocus />

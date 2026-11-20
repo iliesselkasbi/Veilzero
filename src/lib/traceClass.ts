@@ -55,32 +55,60 @@ export const STRUCTURAL_KEYS = new Set(
     "ColorPrimaries",
     "TransferCharacteristics",
     "MatrixCoefficients",
+    // extras
+    "profilename",
+    "profiledescription",
+    "iccprofile",
+    "icc_profile",
+    "srgbrendering",
+    "renderingintent",
+    "profilecopyright",
   ].map((s) => s.toLowerCase())
 );
+const THREAT_KEY_RE =
+  /gps|latitude|longitude|altitude|maker|model|serial|author|artist|copyright|software|datetime|offset|host|owner|device|lens|unique|document.?name|icc.?profile.?name|xp(author|comment|keywords|subject)|usercomment|location|create.?date|modify.?date|originating|profile.?copyright/i;
 
-const STRUCTURAL_RE =
-  /^(imagewidth|imageheight|pixel|bitdepth|colortype|compression|filter|interlace|jfif|resolution|orientation|mimetype|filetype|exifbyteorder|encodingprocess|component|ycbcr|thumbnail|megapixel|samplesperpixel|photometric|predictor|profile)/i;
+export function normalizeKey(key: string): string {
+  return key.replace(/^.*?:/, "").trim(); // strip "exif:", "png:" prefixes
+}
+
+export function isParseFailure(t: MetadataTrace): boolean {
+  return t.key === "⚠️ PARSE FAILURE" || t.key.includes("PARSE FAILURE");
+}
 
 export function isStructuralKey(key: string): boolean {
-  if (STRUCTURAL_KEYS.has(key.toLowerCase())) return true;
-  if (STRUCTURAL_RE.test(key)) return true;
-  return false;
+  const n = normalizeKey(key);
+  return STRUCTURAL_KEYS.has(n.toLowerCase()) || STRUCTURAL_KEYS.has(key.toLowerCase());
 }
 
 export function isThreatTrace(t: MetadataTrace): boolean {
-  if (t.key.startsWith("⚠️")) return true;
+  if (isParseFailure(t)) return true;
   if (isStructuralKey(t.key)) return false;
-  // identifying categories always count when not structural
-  if (["location", "identity", "device", "time"].includes(t.category)) return true;
-  // software can fingerprint toolchain — treat as threat
-  if (t.category === "software") return true;
-  // unknown "other" — only threat if it doesn't look structural
-  return !isStructuralKey(t.key);
+
+  // Category wins when scanner already classified
+  if (t.category === "location" || t.category === "identity") return true;
+  if (t.category === "device" || t.category === "time" || t.category === "software") {
+    return true;
+  }
+
+  // Fallback on key name for uncategorized leftovers
+  if (t.category === "other" && THREAT_KEY_RE.test(normalizeKey(t.key))) return true;
+
+  // Unknown non-structural "other" → treat as threat (safe default for purge UI)
+  if (t.category === "other") return true;
+
+  return false;
 }
 
 export function partitionTraces(traces: MetadataTrace[]) {
-  const threats = traces.filter(isThreatTrace);
-  const structural = traces.filter((t) => !isThreatTrace(t));
-  const compromised = traces.some((t) => t.key.startsWith("⚠️"));
+  const threats: MetadataTrace[] = [];
+  const structural: MetadataTrace[] = [];
+
+  for (const t of traces) {
+    if (isThreatTrace(t)) threats.push(t);
+    else structural.push(t);
+  }
+
+  const compromised = traces.some(isParseFailure);
   return { threats, structural, compromised };
 }

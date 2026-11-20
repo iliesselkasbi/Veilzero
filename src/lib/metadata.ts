@@ -14,11 +14,28 @@ const tag = (b: Uint8Array, o: number) => String.fromCharCode(b[o], b[o + 1], b[
 
 function categorize(key: string): MetadataTrace["category"] {
   const k = key.toLowerCase();
-  if (/gps|latitude|longitude|altitude|location/.test(k)) return "location";
-  if (/make|model|lens|serial|device|camera|software|firmware/.test(k)) return "device";
-  if (/date|time|created|modified/.test(k)) return "time";
-  if (/artist|author|creator|owner|copyright|name|creatortool|producer/.test(k)) return "identity";
-  if (/software|producer/.test(k)) return "software";
+
+  if (
+    /profile.?name|profile.?description|icc|color.?space|rendering.?intent|chromatic|whitepoint|gamma|srgb/.test(
+      k
+    )
+  ) {
+    return "other";
+  }
+
+  if (/gps|latitude|longitude|altitude|location|destination/.test(k)) return "location";
+  if (
+    /artist|author|by-line|byline|creator(?!tool)|owner|copyright|username|xpauthor|contact|email|writer/.test(
+      k
+    )
+  ) {
+    return "identity";
+  }
+  if (/make|model|lens|serial|device|camera|hostcomputer|unique.?id|body.?serial/.test(k)) {
+    return "device";
+  }
+  if (/date|time|created|modified|subsec|offsettime/.test(k)) return "time";
+  if (/software|firmware|creatortool|producer|engine|processing|history/.test(k)) return "software";
   return "other";
 }
 
@@ -136,7 +153,15 @@ function stripJpeg(b: Uint8Array): Uint8Array<ArrayBuffer> {
   return concat(chunks);
 }
 
-const PNG_DROP = new Set(["tEXt", "zTXt", "iTXt", "eXIf", "tIME"]);
+const PNG_DROP = new Set([
+  "tEXt",
+  "zTXt",
+  "iTXt",
+  "eXIf",
+  "tIME",
+  "iCCP",
+  "pHYs",
+]);
 
 function stripPng(b: Uint8Array): Uint8Array<ArrayBuffer> {
   const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];

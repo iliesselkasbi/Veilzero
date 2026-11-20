@@ -1,67 +1,131 @@
 # VEILZERO — Be seen. Not identified.
 
-Browser-based anti-surveillance toolkit. Cloaks your face, distorts your voice and strips file metadata. Everything runs client-side. Nothing hits a server.
+**Off-grid coordination for life in the Hollow.**
 
-| Mode | What it does |
-|---|---|
-| **VEILZERO LIVE** (`/live`) | Webcam + mic → real-time face mask or experimental face-mesh warp + voice distortion → record + export |
-| **VEILZERO CLEAN** (`/clean`) | Drop a file → strip metadata → verify → export clean copy |
+**Launch Live App:** **https://veilzero.vercel.app/**
+> *(Runs 100% client-side in your browser over HTTPS. No login, no uploads, and works offline once cached.)*
 
-## Run
+VEILZERO is a 100% client-side anti-surveillance toolkit built to keep working when the uplink dies. Cloaks your face, distorts your voice, scrubs identifying file metadata, and seals exports into offline **Resistance Drops**. Nothing uploads. No accounts. Zero external requests.
 
+---
+
+## Core Modules
+
+| Module | Route | What it does |
+|---|---|---|
+| **Witness Cam** | `/live` | Real-time webcam face masking (on-device MediaPipe) + native Web Audio pitch/timbre distortion. Includes a fail-closed killswitch if tracking slips. |
+| **Evidence Scrub** | `/clean` | Strips identifying metadata (GPS, device, author, timestamps) while keeping safe structural tags (dimensions, bit depth). Includes local SHA-256 integrity hashing. |
+| **Resistance Drop** | `/live` & `/clean` | Seals media into a self-contained, password-protected HTML file using **AES-256-GCM**. Opens offline and features a one-click **Burn View** wipe. |
+| **Blackout Mode** | Global | Production PWA + Service Worker caches the app shell and ML models so the toolkit runs completely offline. |
+| **Global Burn & HUD** | Global | Live corner telemetry (`● ZERO-TRUST SECURE \| 0 EXT REQ`) and a navigation **BURN** button that wipes session state and revokes object URLs. |
+
+---
+
+## Quick Start
+
+### Requirements
+* **Node.js:** 20.9+ (20 LTS recommended)
+* **Browser:** Modern Chromium-based browser (requires `localhost` or HTTPS for camera, mic, WASM, and WebCrypto)
+
+### Installation
 ```bash
-npm ci             # postinstall copies MediaPipe model files to public/mediapipe
-npm run dev
+git clone https://github.com/iliesselkasbi/Veilzero.git
+cd Veilzero
+npm ci             # Runs postinstall to copy MediaPipe model files to public/mediapipe
 ```
 
-Open http://localhost:3000. Camera and mic need `localhost` or HTTPS.
+### Development Mode
+```bash
+npm run dev
+```
+Open `http://localhost:3000`. *(Note: Service worker caching is disabled in dev mode to prevent conflicts with Hot Module Replacement.)*
 
-## Validate changes
+### Judge / Blackout Demo Mode (Offline-Capable)
+To test full offline capability and service worker caching, run the production build:
+```bash
+npm run demo
 
+```
+1. Open `http://localhost:3000` and visit `/`, `/live`, `/clean`, and `/about` once to seed the cache.
+2. Open **DevTools → Application → Service Workers** and confirm the worker is **activated**.
+3. Open **DevTools → Network**, set throttling to **Offline**, and hard-reload the page.
+4. Test Witness Cam, Evidence Scrub, and Resistance Drops — the app continues working with **`0 EXT REQ`** on the HUD.
+
+---
+
+## How the Privacy Guarantees Are Built
+
+* **Zero External Requests:** All fonts, scripts, and MediaPipe WASM/model files are self-hosted in `/public/mediapipe`. No CDNs, telemetry, or cloud APIs exist.
+* **Live Zero-Trust HUD:** Real-time network monitoring (`● ZERO-TRUST SECURE | 0 EXT REQ`) that shifts to the critical alert state (`CRITICAL: NETWORK BREACH DETECTED | 1 EXT REQ`) upon clicking `[ INJECT TEST PACKET ]`.
+* **Raw Feed Never Exposed:** The raw camera `<video>` stays off-screen. Users and `MediaRecorder` only access the processed canvas and distorted audio stream.
+* **Fail-Closed Killswitch:** If face tracking drops or the lens is covered (~120ms–500ms), the frame blacks out/blurs and recording locks until a face is re-acquired.
+* **No Raw-Voice Path:** The Web Audio graph routes directly through the pitch/timbre chain. Muting silences output rather than bypassing processing.
+* **Verified Metadata Purge:** Files are re-scanned after stripping to confirm residual identifying threats equal `0`, paired with before/after local **SHA-256** checksums.
+* **Live Auditability:** The `/about` page monitors the browser `Performance API` in real time to verify `0` off-origin requests and `0` beacons.
+* **Hardened Headers:** `next.config.js` enforces `Referrer-Policy: no-referrer` and a strict `Permissions-Policy`.
+* **Network boundary:** a restrictive Content Security Policy rejects cross-origin resources, while runtime guards block cross-origin `fetch`, XHR, and beacon attempts. The HUD distinguishes blocked attempts from completed external requests.
+* **Encrypted drops:** stealth mode hides the filename and metadata until unlock. Payloads are encrypted in authenticated 1 MiB AES-GCM chunks; password-derived keys use PBKDF2-SHA-256 with 600,000 iterations. JavaScript memory clearing is best effort, not guaranteed zeroization.
+* **Experimental face warp:** Ghost mode changes the face mesh geometrically, but is not validated against face-recognition systems. Use Void for full face redaction.
+
+---
+
+## Metadata Support (`/clean`)
+
+| Format | Stripping Method |
+|---|---|
+| **JPEG** | Removes EXIF, XMP, IPTC, ICC, and comments (`APP1`–`APP15` except Adobe `APP14`, `COM`). Pixels remain untouched. |
+| **PNG** | Removes `tEXt`, `zTXt`, `iTXt`, `eXIf`, `tIME`, and `iCCP` chunks. Pixels remain untouched. |
+| **WebP** | Removes `EXIF`, `XMP`, and `ICCP` chunks. |
+| **Other Images** | Re-encoded through an HTML5 canvas pass to drop all embedded metadata. |
+| **MP4 / MOV / M4A** | Neutralizes `udta`, `meta`, `XMP`, and `uuid` boxes and clears creation/modification timestamps in place while preserving file size and offsets. |
+| **PDF & Unsupported** | Detected and flagged, **not** stripped. Refused rather than falsely marked clean. |
+
+*(Note: Stripping EXIF also removes orientation tags, so certain mobile photos may display rotated.)*
+
+---
+
+## Tech Stack & Repo Layout
+
+* **Framework:** Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS
+* **On-Device ML & Media:** MediaPipe Face Mesh (local WASM), Web Audio API, HTML5 Canvas
+* **Cryptography & Parsing:** WebCrypto API (`AES-256-GCM`, `SHA-256`), `exifr`, custom binary byte-strippers
+* **Offline PWA:** Custom Service Worker (`public/sw.js`) & Web Manifest
+
+```text
+public/
+  mediapipe/          # Self-hosted FaceMesh JS, WASM, and model binaries
+  sw.js               # Blackout mode service worker
+src/
+  app/                # Next.js routes (/, /live, /clean, /about)
+  components/         # UI, Witness Cam (/live), Evidence Scrub (/clean), HUD
+  hooks/              # MediaPipe, Web Audio, and metadata state hooks
+  lib/                # Byte strippers, AES Resistance Drop builder, SHA-256, session burn
+  config/             # Threat vs. structural metadata tag classifications
+```
+
+---
+
+## Validation & Optional Assets
+
+### Run CI Checks
 ```bash
 npm run lint
 npm run typecheck
 npm run build
 ```
+GitHub Actions automatically runs these checks on pushes and pull requests to `main`. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Project Wiki](docs/wiki/Home.md) for workflow details.
 
-GitHub Actions runs these checks for pushes to `main` and pull requests targeting
-`main`. See [Contributing](CONTRIBUTING.md) and the [project wiki](docs/wiki/Home.md)
-for the development workflow and project guidance.
+### Optional Custom Fonts & OG Image
+Drop `Cinzel-Regular.woff2`, `Cinzel-Bold.woff2`, and `JetBrainsMono-Regular.woff2` into `public/fonts/` (the app falls back to system serif/mono fonts if omitted). Add `public/og-image.png` (`1200×630`) for social link previews.
 
-### Fonts
+---
 
-Drop these into `public/fonts/` (the app falls back to system serif/mono without them):
-`Cinzel-Regular.woff2`, `Cinzel-Bold.woff2`, `JetBrainsMono-Regular.woff2` (all OFL-licensed, from Google Fonts).
-Add `public/og-image.png` (1200×630) for link previews.
+## Known Limits
+VEILZERO minimizes digital traces, but does not guarantee total anonymity:
+* Physical traits (clothing, background, gait, speech patterns, writing style) can still identify you.
+* Determined forensic audio analysis may partially reverse pitch/timbre distortion.
+* Embedded video streams may retain low-level encoder metadata tags.
+* "Coordination layer" refers to local preparation and offline file handoffs, not a live peer-to-peer mesh network.
 
-## How the privacy guarantees are built
-
-- **Raw feed is never shown or recorded.** The camera `<video>` is off-screen. Users see, and `MediaRecorder` captures, only the processed canvas and processed audio.
-- **Fail-closed face tracking.** If no face is tracked for 120 ms the frame is replaced with a tracking-loss screen, and recording is disabled until a face is cloaked again.
-- **No raw-voice path.** The audio graph has no route from mic to output that skips processing. "Mute" silences the output rather than bypassing it.
-- **Ghost mode.** A WebGL renderer remaps MediaPipe face-mesh triangles with small, session-stable geometric offsets. It is an experimental visual transform, not a validated defense against face recognition; use Void for full face redaction.
-- **Voice display.** The input and processed spectrograms are shown live. Input analysis is transient and is not connected to the recording output. Session-randomized timbre filters and pitch shifting do not guarantee voice de-identification.
-- **Self-hosted ML.** MediaPipe assets are served from `/public/mediapipe`, not a CDN.
-- **Network boundary.** A Content Security Policy rejects cross-origin resources, while runtime guards block cross-origin `fetch`, XHR, and beacon attempts. The HUD distinguishes blocked attempts from completed external requests. Same-origin app traffic remains allowed for navigation and local assets.
-- **Resistance Drops.** Stealth mode is the default: the filename, MIME type, creation time, and optional metadata are encrypted with the file. Normal mode intentionally leaves those labels visible. Payloads are encrypted in authenticated 1 MiB AES-GCM chunks; the standalone viewer needs no server.
-- **Offline models.** Postinstall writes a manifest of copied MediaPipe assets, and the production service worker precaches every listed asset before activating.
-- **Verified cleaning.** After stripping, the output file is re-scanned and the "traces remaining" count is the real result.
-- **Verify it yourself.** The About page shows live request counts from the Performance API; DevTools → Network gives an independent check.
-- `Referrer-Policy: no-referrer` and a restrictive `Permissions-Policy` are set in `next.config.js`.
-
-## Metadata support (Clean mode)
-
-| Format | Method |
-|---|---|
-| JPEG | Removes EXIF, XMP, IPTC, ICC, comments (APP1–APP15 except Adobe APP14, COM). Pixels untouched. |
-| PNG | Removes tEXt/zTXt/iTXt/eXIf/tIME chunks. Pixels untouched. |
-| WebP | Removes EXIF, XMP, ICCP chunks. |
-| Other images | Re-encoded through canvas (drops everything, slight re-compression). |
-| MP4 / MOV / M4A | Neutralises `udta`, `meta`, XMP and `uuid` boxes, and clears `mvhd`, `tkhd`, and `mdhd` creation/modification timestamps in place; size and offsets are preserved. |
-| PDF and others | Detected and reported, **not** stripped. Unsupported files are refused rather than falsely marked clean. |
-
-Note: removing EXIF also removes the orientation tag, so some phone photos may display rotated.
-
-## Limits
-
-VEILZERO reduces some identifying signals; it does not guarantee anonymity. Ghost mode is not benchmarked against face-recognition models and can leave faces identifiable. Background, clothing, speech content and writing style can still identify you, and voice distortion can be partially reversed by determined analysis. The spectrogram is not a biometric confidence score. Embedded video streams may also carry encoder tags that are not removed. JavaScript cannot guarantee physical zeroization of all engine-managed copies of sensitive data.
+## Third-Party Attribution
+* **MediaPipe Face Mesh:** Licensed under Apache License 2.0 (Google). Attribution is preserved in `public/mediapipe/`.

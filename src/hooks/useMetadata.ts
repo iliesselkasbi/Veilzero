@@ -28,6 +28,17 @@ export function useMetadata() {
     return threats.filter((t) => !leftKeys.has(t.key));
   }, [phase, remainingTraces, threats]);
 
+
+  const residualThreats = useMemo(
+  () => remainingTraces.filter(isThreatTrace),
+  [remainingTraces]
+);
+
+  // unlock download when:
+  const cleanEnough =
+    phase === "done" && residualThreats.length === 0 && !remainingTraces.some(
+    (t) => t.key.includes("PARSE FAILURE")
+  );
   const reset = useCallback(() => {
     setFile(null);
     setPhase("idle");

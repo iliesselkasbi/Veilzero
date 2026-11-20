@@ -3,11 +3,6 @@
 import { useEffect, useState } from "react";
 import Card from "@/components/ui/Card";
 
-/**
- * Counts resource requests this page has made since load, using the browser's
- * own Performance API. Lets people verify "0 KB sent" themselves, and points to
- * DevTools for an independent check.
- */
 export default function NetworkMonitor() {
   const [rows, setRows] = useState<{ name: string; type: string; kb: number }[]>([]);
 
@@ -30,16 +25,23 @@ export default function NetworkMonitor() {
 
   return (
     <Card>
-      <h2 className="font-display text-xl font-bold tracking-wide">Verify it yourself</h2>
+      <h2 className="font-display text-xl font-bold tracking-wide">
+        Prove the wire is quiet
+      </h2>
       <p className="mt-2 text-sm text-text-muted">
-        Live view of requests this page has made. Your media never appears here. For an independent check, open
-        DevTools → Network while using VEILZERO.
+        Live count of what <em>this page</em> has fetched since load — same lens the
+        Directorate wishes you ignored. Your recordings and scrubbed files never appear
+        here. For a second opinion: DevTools → Network, then pull the uplink and keep
+        working in blackout.
       </p>
       <div className="mt-4 grid grid-cols-3 gap-3 text-center">
         <Stat label="Requests" value={rows.length} />
-        <Stat label="Third-party" value={external.length} />
-        <Stat label="Beacons sent" value={posts.length} />
+        <Stat label="Off-origin" value={external.length} />
+        <Stat label="Beacons" value={posts.length} />
       </div>
+      <p className="mt-3 font-mono text-[10px] tracking-wider text-text-muted">
+        TARGET: 0 OFF-ORIGIN · 0 BEACONS · MEDIA NEVER LISTED
+      </p>
     </Card>
   );
 }
