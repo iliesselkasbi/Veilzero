@@ -157,13 +157,18 @@ function stripPng(b: Uint8Array): Uint8Array<ArrayBuffer> {
 
 function stripWebp(b: Uint8Array): Uint8Array<ArrayBuffer> {
   if (tag(b, 0) !== "RIFF" || tag(b, 8) !== "WEBP") throw new Error("Not a WebP");
+  const riffSize = (b[4] | (b[5] << 8) | (b[6] << 16) | (b[7] << 24)) >>> 0;
+  if (riffSize !== b.length - 8) throw new Error("Invalid WebP size");
+
   const chunks: Uint8Array[] = [];
   let i = 12;
-  let vp8xIndex = -1;
-  while (i + 8 <= b.length) {
+  while (i < b.length) {
+    if (b.length - i < 8) throw new Error("Truncated WebP chunk");
+
     const type = tag(b, i);
-    const len = b[i + 4] | (b[i + 5] << 8) | (b[i + 6] << 16) | (b[i + 7] << 24);
-    const padded = len + (len & 1);
+    const len = (b[i + 4] | (b[i + 5] << 8) | (b[i + 6] << 16) | (b[i + 7] << 24)) >>> 0;
+    const padded = len + (len % 2);
+    if (padded > b.length - i - 8) throw new Error("WebP chunk exceeds file size");
     const total = 8 + padded;
     if (type === "EXIF" || type === "XMP " || type === "ICCP") {
       i += total;
@@ -171,13 +176,12 @@ function stripWebp(b: Uint8Array): Uint8Array<ArrayBuffer> {
     }
     const slice = b.slice(i, i + total);
     if (type === "VP8X") {
+      if (len < 10) throw new Error("Invalid VP8X chunk");
       slice[8] &= ~(0x20 | 0x08 | 0x04); // clear ICC, EXIF, XMP flags
-      vp8xIndex = chunks.length;
     }
     chunks.push(slice);
     i += total;
   }
-  void vp8xIndex;
   const body = concat(chunks);
   const out = new Uint8Array(12 + body.length);
   out.set(b.subarray(0, 4), 0);
