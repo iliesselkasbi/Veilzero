@@ -42,7 +42,9 @@ function categorize(key: string): MetadataTrace["category"] {
 function stringify(v: unknown): string {
   if (v == null) return "";
   if (v instanceof Date) return v.toISOString();
-  if (v instanceof Uint8Array || ArrayBuffer.isView(v)) return `[${(v as any).byteLength} bytes]`;
+  if (v instanceof Uint8Array || ArrayBuffer.isView(v)) {
+    return `[${(v as ArrayBufferView).byteLength} bytes]`;
+  }
   if (Array.isArray(v)) return v.map(stringify).join(", ");
   if (typeof v === "object") return JSON.stringify(v).slice(0, 120);
   return String(v).slice(0, 160);
@@ -90,8 +92,15 @@ export async function scanMetadata(file: File): Promise<MetadataTrace[]> {
     try {
       try {
         const found = findMp4MetaBoxes(buf);
-        for (const f of found) {
+        for (const f of found.hits) {
           traces.push({ key: `${f.type} box`, value: `${f.size} bytes`, category: "other" });
+        }
+        for (const handler of found.metadataHandlers) {
+          traces.push({
+            key: `Metadata track (${handler})`,
+            value: "Embedded metadata track is not removed by this container-level scrub.",
+            category: "other",
+          });
         }
       } catch {
         traces.push({
@@ -122,65 +131,95 @@ export async function scanMetadata(file: File): Promise<MetadataTrace[]> {
 // ---------------------------------------------------------------------------
 
 /** JPEG: drop APP1 (EXIF/XMP), APP2 (ICC / FlashPix), APP3-APP15, APP13 (IPTC/Photoshop) and COM. Keep JFIF (APP0) and APP14 (Adobe colour transform). */
-function stripJpeg(b: Uint8Array): Uint8Array<ArrayBuffer> {
-  if (b[0] !== 0xff || b[1] !== 0xd8) throw new Error("Not a JPEG");
-  const out: number[] = [0xff, 0xd8];
+export function stripJpeg(b: Uint8Array): Uint8Array<ArrayBuffer> {
+  if (b.length < 4 || b[0] !== 0xff || b[1] !== 0xd8) throw new Error("Not a JPEG");
   const chunks: Uint8Array[] = [new Uint8Array([0xff, 0xd8])];
   let i = 2;
+  let inScan = false;
   while (i < b.length) {
-    if (b[i] !== 0xff) throw new Error("Corrupt JPEG");
-    const marker = b[i + 1];
+    let markerStart = i;
+    let marker: number;
+    if (inScan) {
+      const scanStart = i;
+      while (i < b.length) {
+        if (b[i] !== 0xff) {
+          i++;
+          continue;
+        }
+        markerStart = i;
+        while (i < b.length && b[i] === 0xff) i++;
+        if (i >= b.length) throw new Error("Truncated JPEG scan");
+        marker = b[i];
+        if (marker === 0x00 || (marker >= 0xd0 && marker <= 0xd7)) {
+          i++;
+          continue;
+        }
+        chunks.push(b.subarray(scanStart, markerStart));
+        inScan = false;
+        break;
+      }
+      if (inScan) throw new Error("JPEG has no EOI marker");
+      i = markerStart;
+      while (i < b.length && b[i] === 0xff) i++;
+      if (i >= b.length) throw new Error("Truncated JPEG marker");
+      marker = b[i++];
+    } else {
+      if (b[i] !== 0xff) throw new Error("Corrupt JPEG marker");
+      markerStart = i;
+      while (i < b.length && b[i] === 0xff) i++;
+      if (i >= b.length) throw new Error("Truncated JPEG marker");
+      marker = b[i++];
+    }
+
     if (marker === 0xd9) {
-      chunks.push(b.subarray(i, i + 2));
-      break;
+      chunks.push(b.subarray(markerStart, i));
+      return concat(chunks);
     }
-    if (marker === 0xda) {
-      // Start of scan: everything after is entropy-coded data to EOF.
-      chunks.push(b.subarray(i));
-      break;
-    }
-    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
-      chunks.push(b.subarray(i, i + 2));
-      i += 2;
+    if (marker === 0x01 || marker === 0xd8 || (marker >= 0xd0 && marker <= 0xd7)) {
+      chunks.push(b.subarray(markerStart, i));
       continue;
     }
-    const len = u16(b, i + 2);
+    if (marker === 0x00 || i + 2 > b.length) throw new Error("Invalid JPEG segment");
+    const len = u16(b, i);
+    if (len < 2 || len > b.length - i) throw new Error("JPEG segment exceeds file size");
+    const end = i + len;
     const drop = (marker >= 0xe1 && marker <= 0xef && marker !== 0xee) || marker === 0xfe;
-    if (!drop) chunks.push(b.subarray(i, i + 2 + len));
-    i += 2 + len;
+    if (!drop) chunks.push(b.subarray(markerStart, end));
+    i = end;
+    inScan = marker === 0xda;
   }
-  void out;
-  return concat(chunks);
+  throw new Error("JPEG has no EOI marker");
 }
 
-const PNG_DROP = new Set([
-  "tEXt",
-  "zTXt",
-  "iTXt",
-  "eXIf",
-  "tIME",
-  "iCCP",
-  "pHYs",
-]);
+const PNG_KEEP = new Set(["IHDR", "PLTE", "IDAT", "IEND", "tRNS", "acTL", "fcTL", "fdAT"]);
 
-function stripPng(b: Uint8Array): Uint8Array<ArrayBuffer> {
+export function stripPng(b: Uint8Array): Uint8Array<ArrayBuffer> {
   const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-  if (!sig.every((v, i) => b[i] === v)) throw new Error("Not a PNG");
+  if (b.length < 8 || !sig.every((v, i) => b[i] === v)) throw new Error("Not a PNG");
   const chunks: Uint8Array[] = [b.subarray(0, 8)];
   let i = 8;
+  let ended = false;
   while (i < b.length) {
+    if (b.length - i < 12) throw new Error("Truncated PNG chunk");
     const len = u32(b, i);
     const type = tag(b, i + 4);
     const total = 12 + len;
-    const drop = PNG_DROP.has(type);
-    if (!drop) chunks.push(b.subarray(i, i + total));
+    if (total > b.length - i) throw new Error("PNG chunk exceeds file size");
+    if (PNG_KEEP.has(type)) chunks.push(b.subarray(i, i + total));
     i += total;
-    if (type === "IEND") break;
+    if (type === "IEND") {
+      if (len !== 0) throw new Error("Invalid PNG IEND chunk");
+      ended = true;
+      break;
+    }
   }
+  if (!ended) throw new Error("PNG has no IEND chunk");
   return concat(chunks);
 }
 
-function stripWebp(b: Uint8Array): Uint8Array<ArrayBuffer> {
+const WEBP_KEEP = new Set(["VP8X", "VP8 ", "VP8L", "ALPH", "ANIM", "ANMF"]);
+
+export function stripWebp(b: Uint8Array): Uint8Array<ArrayBuffer> {
   if (tag(b, 0) !== "RIFF" || tag(b, 8) !== "WEBP") throw new Error("Not a WebP");
   const riffSize = (b[4] | (b[5] << 8) | (b[6] << 16) | (b[7] << 24)) >>> 0;
   if (riffSize !== b.length - 8) throw new Error("Invalid WebP size");
@@ -195,7 +234,7 @@ function stripWebp(b: Uint8Array): Uint8Array<ArrayBuffer> {
     const padded = len + (len % 2);
     if (padded > b.length - i - 8) throw new Error("WebP chunk exceeds file size");
     const total = 8 + padded;
-    if (type === "EXIF" || type === "XMP " || type === "ICCP") {
+    if (!WEBP_KEEP.has(type)) {
       i += total;
       continue;
     }
@@ -227,11 +266,18 @@ interface BoxHit {
   header: number;
 }
 
+interface Mp4Scan {
+  hits: BoxHit[];
+  metadataHandlers: string[];
+}
+
 /** Walks an ISO-BMFF tree and returns user-data / metadata boxes (udta, meta, ©xyz handled by parent udta). */
-function findMp4MetaBoxes(b: Uint8Array): BoxHit[] {
+function findMp4MetaBoxes(b: Uint8Array): Mp4Scan {
   const hits: BoxHit[] = [];
+  const metadataHandlers = new Set<string>();
   const containers = new Set(["moov", "trak", "mdia", "minf", "stbl", "edts"]);
   const timestampBoxes = new Set(["mvhd", "tkhd", "mdhd"]);
+  const metadataHandlerTypes = new Set(["gpmd", "meta", "mdta", "mett", "metx"]);
   let malformed = false;
   const walk = (start: number, end: number) => {
     if (start > end) {
@@ -262,6 +308,14 @@ function findMp4MetaBoxes(b: Uint8Array): BoxHit[] {
         hits.push({ type, offset: i, size, header });
       } else if (timestampBoxes.has(type)) {
         hits.push({ type, offset: i, size, header });
+      } else if (type === "hdlr") {
+        const handlerOffset = i + header + 8;
+        if (handlerOffset + 4 > i + size) {
+          malformed = true;
+          return;
+        }
+        const handler = tag(b, handlerOffset);
+        if (metadataHandlerTypes.has(handler)) metadataHandlers.add(handler);
       } else if (containers.has(type)) {
         walk(i + header, i + size);
       }
@@ -271,7 +325,7 @@ function findMp4MetaBoxes(b: Uint8Array): BoxHit[] {
   };
   walk(0, b.length);
   if (malformed) throw new Error("Malformed ISO-BMFF container");
-  return hits;
+  return { hits, metadataHandlers: [...metadataHandlers] };
 }
 
 /**
@@ -279,9 +333,13 @@ function findMp4MetaBoxes(b: Uint8Array): BoxHit[] {
  * and zero-filling their payload. Box sizes are unchanged so no offset in
  * stco/co64 needs patching and playback is unaffected.
  */
-function stripMp4(b: Uint8Array): { data: Uint8Array<ArrayBuffer>; removed: number } {
+export function stripMp4(b: Uint8Array): {
+  data: Uint8Array<ArrayBuffer>;
+  removed: number;
+  metadataHandlers: string[];
+} {
   const copy = new Uint8Array(b);
-  const hits = findMp4MetaBoxes(copy);
+  const { hits, metadataHandlers } = findMp4MetaBoxes(copy);
   for (const h of hits) {
     if (h.type === "mvhd" || h.type === "tkhd" || h.type === "mdhd") {
       const version = copy[h.offset + h.header];
@@ -296,20 +354,33 @@ function stripMp4(b: Uint8Array): { data: Uint8Array<ArrayBuffer>; removed: numb
     copy.set([0x66, 0x72, 0x65, 0x65], h.offset + 4); // "free"
     copy.fill(0, h.offset + h.header, h.offset + h.size);
   }
-  return { data: copy, removed: hits.length };
+  return { data: copy, removed: hits.length, metadataHandlers };
 }
 
-/** Any other raster image: decode and re-encode through canvas, which drops all embedded metadata. */
+/** Decode and re-encode through canvas, which drops metadata while retaining alpha when supported. */
 async function reencodeImage(file: File): Promise<Blob> {
-  const bmp = await createImageBitmap(file);
-  const canvas = document.createElement("canvas");
-  canvas.width = bmp.width;
-  canvas.height = bmp.height;
-  canvas.getContext("2d")!.drawImage(bmp, 0, 0);
-  const type = file.type === "image/png" ? "image/png" : "image/jpeg";
-  return new Promise((res, rej) =>
-    canvas.toBlob((b) => (b ? res(b) : rej(new Error("encode failed"))), type, 0.95)
-  );
+  const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = bmp.width;
+    canvas.height = bmp.height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Canvas is unavailable");
+    context.drawImage(bmp, 0, 0);
+    const type =
+      file.type === "image/jpeg" || file.type === "image/png" || file.type === "image/webp"
+        ? file.type
+        : "image/png";
+    return await new Promise((resolve, reject) =>
+      canvas.toBlob(
+        (blob) => (blob ? resolve(blob) : reject(new Error("Image re-encoding failed"))),
+        type,
+        type === "image/png" ? undefined : 0.95
+      )
+    );
+  } finally {
+    bmp.close();
+  }
 }
 
 function concat(parts: Uint8Array[]): Uint8Array<ArrayBuffer> {
@@ -355,11 +426,13 @@ export function supportsStrip(file: File): { ok: boolean; reason?: string } {
 export async function stripMetadata(file: File, traces: MetadataTrace[]): Promise<CleanResult> {
   const kind = detectKind(file);
   const buf = new Uint8Array(await file.arrayBuffer());
+  const warnings: string[] = [];
   try {
     let blob: Blob;
     const lower = file.name.toLowerCase();
 
     if (kind === "image") {
+      let usedFallback = false;
       try {
         if (file.type === "image/jpeg" || /\.jpe?g$/.test(lower)) {
           const stripped = stripJpeg(buf);
@@ -387,7 +460,24 @@ export async function stripMetadata(file: File, traces: MetadataTrace[]): Promis
         }
       } catch {
         blob = await reencodeImage(file);
+        usedFallback = true;
       }
+
+      const needsOrientationFix =
+        (file.type === "image/jpeg" || /\.jpe?g$/.test(lower)) &&
+        traces.some((trace) => trace.key.toLowerCase().includes("orientation"));
+      if (needsOrientationFix && !usedFallback) {
+        blob = await reencodeImage(file);
+        warnings.push("The image was re-encoded to apply its EXIF orientation before stripping metadata.");
+      }
+      if (usedFallback && file.type === "image/webp" && blob.type !== "image/webp") {
+        warnings.push(
+          "WebP could not be losslessly stripped, so it was re-encoded as PNG to preserve transparency."
+        );
+      } else if (usedFallback) {
+        warnings.push("The image required canvas re-encoding; some image quality may change.");
+      }
+      warnings.push("Color-profile metadata is removed where present; displayed colors may shift.");
 
       // If lossless strip left identifying tags, force canvas re-encode (guarantees EXIF/XMP death)
       const probe = new File([blob], file.name, { type: blob.type || file.type });
@@ -403,7 +493,12 @@ export async function stripMetadata(file: File, traces: MetadataTrace[]): Promis
         blob = await reencodeImage(file);
       }
     } else if (kind === "video" || kind === "audio") {
-      const { data } = stripMp4(buf);
+      const { data, metadataHandlers } = stripMp4(buf);
+      for (const handler of metadataHandlers) {
+        warnings.push(
+          `Embedded ${handler} metadata track may contain location or other identifying data and was not removed.`
+        );
+      }
       try {
         blob = new Blob([data], { type: file.type });
       } finally {
@@ -419,6 +514,7 @@ export async function stripMetadata(file: File, traces: MetadataTrace[]): Promis
       originalSize: file.size,
       cleanSize: blob.size,
       tracesRemoved: traces.length,
+      warnings,
     };
   } finally {
     buf.fill(0);

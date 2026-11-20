@@ -29,10 +29,10 @@ export default function NetworkMonitor() {
         Prove the wire is quiet
       </h2>
       <p className="mt-2 text-sm text-text-muted">
-        Live count of what <em>this page</em> has fetched since load — same lens the
-        Directorate wishes you ignored. Your recordings and scrubbed files never appear
-        here. For a second opinion: DevTools → Network, then pull the uplink and keep
-        working in blackout.
+        Best-effort observations of requests <em>this page</em> has made since load.
+        Performance entries can miss activity; this is not proof that no network traffic
+        occurred. Your recordings and scrubbed files are not listed here. For a second
+        opinion, inspect DevTools → Network.
       </p>
       <div className="mt-4 grid grid-cols-3 gap-3 text-center">
         <Stat label="Requests" value={rows.length} />

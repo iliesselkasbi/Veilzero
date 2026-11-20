@@ -62,7 +62,7 @@ export default function LivePage() {
         <div>
           <h1 className="font-display text-3xl font-bold tracking-wide">VEILZERO LIVE</h1>
           <p className="mt-2 text-sm text-text-muted">
-            Face and voice are cloaked before anything is recorded. Nothing leaves this device.
+            Face and voice are transformed before recording. This reduces identifying detail but does not guarantee anonymity.
           </p>
         </div>
         <p className={`font-mono text-sm ${cam.status === "error" ? "text-danger" : "text-text-muted"}`}>{statusText}</p>
@@ -111,10 +111,10 @@ export default function LivePage() {
           </div>
           {cameraOn && !tracking && (
             <p className="text-xs text-text-muted">
-              No face is being tracked, so the frame is hidden. Recording is available once a face is cloaked.
+              No face is being tracked, so the frame is hidden. Recording is available once a face is obscured.
             </p>
           )}
-          {rec.error && <p className="text-sm text-danger">{COPY.error}</p>}
+          {rec.error && <p className="text-sm text-danger">{rec.errorMessage ?? COPY.error}</p>}
           {initError && <p className="text-sm text-danger">Face masking could not initialize: {initError}</p>}
         </div>
 

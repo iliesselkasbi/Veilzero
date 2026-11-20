@@ -5,11 +5,11 @@ function createNonce(): string {
   return btoa(String.fromCharCode(...bytes));
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const nonce = createNonce();
   const policy = [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'wasm-unsafe-eval'`,
     "style-src 'self' 'unsafe-inline'",
     "connect-src 'self'",
     "img-src 'self' blob: data:",

@@ -12,6 +12,7 @@ import {
   type DropPreset,
 } from "@/lib/resistanceDrop";
 import { burnObjectUrls } from "@/lib/burn";
+import { generateSecureWordPassphrase } from "@/lib/passphrase";
 
 interface Props {
   result: RecordingResult | null;
@@ -46,6 +47,10 @@ export default function ExportModal({ result, open, onClose, onDiscard }: Props)
     if (!result) return;
     if (!password || password.length < 12) {
       setNote("Passphrase must be at least 12 characters.");
+      return;
+    }
+    if (result.blob.size > 256 * 1024 * 1024) {
+      setNote("Recording exceeds the 256 MB browser-memory safety limit.");
       return;
     }
     setBusy(true);
@@ -92,6 +97,15 @@ export default function ExportModal({ result, open, onClose, onDiscard }: Props)
         />
         <p className="font-mono text-xs text-text-muted">
           {secs}s · {formatBytes(result.blob.size)} · .{ext}
+        </p>
+        {result.blob.size > 128 * 1024 * 1024 && (
+          <p className="rounded border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+            This recording is large. Unlocking it decrypts the whole file into browser memory and may exhaust a mobile device.
+          </p>
+        )}
+        <p className="text-xs text-text-muted">
+          Exported WebM files are not remuxed; encoder strings and container timestamps may remain.
+          Test any sensitive export before distribution.
         </p>
 
         <IntegrityPanel output={result.blob} outputLabel="Recording" />
@@ -169,15 +183,27 @@ export default function ExportModal({ result, open, onClose, onDiscard }: Props)
             </select>
           )}
 
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            minLength={12}
-            autoComplete="new-password"
-            placeholder="Shared passphrase"
-            className="w-full rounded border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-primary"
-          />
+          <div className="flex gap-2">
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              minLength={12}
+              autoComplete="new-password"
+              placeholder="Shared passphrase"
+              className="min-w-0 flex-1 rounded border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-primary"
+            />
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={() => setPassword(generateSecureWordPassphrase())}
+            >
+              Generate
+            </Button>
+          </div>
+          <p className="text-[11px] text-text-muted">
+            Generate creates a 12-word passphrase from six independently selected word pairs.
+          </p>
           <label className="flex items-start gap-2 text-xs text-text-muted">
             <input
               type="checkbox"
@@ -199,7 +225,7 @@ export default function ExportModal({ result, open, onClose, onDiscard }: Props)
           >
             {busy ? "Encrypting…" : "Generate encrypted drop .html"}
           </Button>
-          {note && <p className="font-mono text-[11px] text-text-muted">{note}</p>}
+          {note && <p className="font-mono text-[11px] text-text-muted" role="status" aria-live="polite">{note}</p>}
         </div>
       </div>
     </Modal>

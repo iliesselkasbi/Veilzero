@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   validate:
-    name: Lint, typecheck, and build
+    name: Lint, test, typecheck, and build
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
@@ -34,10 +34,24 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Test
+        run: |
+          npm run generate-fixtures
+          npm test
+
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Dependency audit
+        run: npm run audit
 
       - name: Build
         run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: 1
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser smoke test
+        run: npm run test:e2e

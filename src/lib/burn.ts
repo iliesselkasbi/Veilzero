@@ -1,37 +1,40 @@
 /** Best-effort wipe of in-tab sensitive artifacts. */
+const objectUrls = new Set<string>();
+
+export function createTrackedObjectUrl(blob: Blob): string {
+  const url = URL.createObjectURL(blob);
+  objectUrls.add(url);
+  return url;
+}
+
+export function revokeTrackedObjectUrl(url: string): void {
+  objectUrls.delete(url);
+  URL.revokeObjectURL(url);
+}
+
 export function burnObjectUrls(...urls: Array<string | null | undefined>) {
-  for (const u of urls) {
-    if (u) {
-      try {
-        URL.revokeObjectURL(u);
-      } catch {}
-    }
+  const targets = urls.length ? urls : [...objectUrls];
+  for (const url of targets) {
+    if (url) revokeTrackedObjectUrl(url);
   }
 }
 
 export async function burnTabHard() {
-  // Revoke any blob: URLs the page still knows via performance entries (best effort)
-  try {
-    const entries = performance.getEntriesByType("resource") as PerformanceResourceTiming[];
-    for (const e of entries) {
-      if (e.name.startsWith("blob:")) {
-        try {
-          URL.revokeObjectURL(e.name);
-        } catch {}
-      }
-    }
-  } catch {}
+  burnObjectUrls();
+  sessionStorage.clear();
+}
 
-  // Clear session scratch
-  try {
-    sessionStorage.clear();
-  } catch {}
-
-  // Optional: clear BW caches if PWA exists later
-  try {
-    if ("caches" in window) {
-      const keys = await caches.keys();
-      await Promise.all(keys.map((k) => caches.delete(k)));
-    }
-  } catch {}
+export async function wipeOfflineData(): Promise<void> {
+  if ("caches" in window) {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((key) => key.startsWith("veilzero-")).map((key) => caches.delete(key)));
+  }
+  if ("serviceWorker" in navigator) {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(
+      registrations
+        .filter((registration) => new URL(registration.scope).origin === location.origin)
+        .map((registration) => registration.unregister())
+    );
+  }
 }

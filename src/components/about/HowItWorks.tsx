@@ -13,7 +13,7 @@ const rows = [
   ],
   [
     "Drops",
-    "Packages media into an encrypted HTML file (AES-256-GCM) you can open offline and delete with Burn View.",
+    "Packages media into an encrypted HTML file (AES-256-GCM) you can open offline and clear from view with the BURN VIEW control.",
   ],
   [
     "Blackout",

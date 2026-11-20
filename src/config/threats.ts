@@ -22,5 +22,5 @@ export const LIMITS = [
   "Clothes, background landmarks, how you walk, and the words you say can still identify you.",
   "Clean mode focuses on embedded metadata (and safe re-encoding). It is not a full guarantee against every hidden watermark.",
   "Voice distortion is one layer. A lab with time may still try to reverse parts of it.",
-  "Encrypted Drops are only as safe as your passphrase. Use Burn View when you are done reading.",
+  "Encrypted Drops are only as safe as your passphrase. Use BURN VIEW when you are done reading.",
 ];

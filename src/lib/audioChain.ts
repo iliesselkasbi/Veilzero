@@ -36,7 +36,9 @@ function makeTables(ctx: AudioContext, shift: number) {
 }
 
 export function createVoiceChain(input: MediaStream, preset: AudioPreset): VoiceChain {
-  const AC = window.AudioContext || (window as any).webkitAudioContext;
+  type LegacyWindow = Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext };
+  const AC = window.AudioContext || (window as LegacyWindow).webkitAudioContext;
+  if (!AC) throw new Error("Web Audio is unavailable");
   const ctx: AudioContext = new AC();
   if (ctx.state === "suspended") {
     void ctx.resume().catch(() => undefined);

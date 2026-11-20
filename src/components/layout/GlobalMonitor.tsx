@@ -3,12 +3,14 @@ import { useEffect, useState } from "react";
 import { installNetworkLockdown } from "@/lib/networkLockdown";
 
 export default function GlobalMonitor() {
+  const isDevelopment = process.env.NODE_ENV === "development";
   const [outbound, setOutbound] = useState(0);
   const [blocked, setBlocked] = useState(0);
   const [breach, setBreach] = useState(false);
 
   useEffect(() => {
     installNetworkLockdown();
+    let observer: PerformanceObserver | null = null;
     const onBlocked = () => {
       setBlocked((count) => count + 1);
       setBreach(true);
@@ -25,11 +27,13 @@ export default function GlobalMonitor() {
     window.addEventListener("veilzero:blocked-request", onBlocked);
     document.addEventListener("securitypolicyviolation", onPolicyViolation);
 
+    const observed = new Set(performance
+      .getEntriesByType("resource")
+      .map((entry) => entry.name));
     const checkNetwork = () => {
-      const entries = performance.getEntriesByType("resource") as PerformanceResourceTiming[];
-      const external = entries.filter((entry) => {
+      const external = [...observed].filter((name) => {
         try {
-          return new URL(entry.name, location.href).origin !== location.origin;
+          return new URL(name, location.href).origin !== location.origin;
         } catch {
           return false;
         }
@@ -37,10 +41,17 @@ export default function GlobalMonitor() {
       setOutbound(external.length);
       if (external.length > 0) setBreach(true);
     };
+
+    if ("PerformanceObserver" in window) {
+      observer = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) observed.add(entry.name);
+        checkNetwork();
+      });
+      observer.observe({ entryTypes: ["resource"] });
+    }
     checkNetwork();
-    const id = setInterval(checkNetwork, 1000);
     return () => {
-      clearInterval(id);
+      observer?.disconnect();
       window.removeEventListener("veilzero:blocked-request", onBlocked);
       document.removeEventListener("securitypolicyviolation", onPolicyViolation);
     };
@@ -54,11 +65,16 @@ export default function GlobalMonitor() {
 
   return (
     <div className="fixed bottom-4 right-4 z-50 font-mono text-[10px] tracking-wider flex flex-col items-end gap-2 pointer-events-none">
-      <button onClick={simulateBreach} className="pointer-events-auto opacity-55 hover:opacity-100 text-danger transition-opacity">
-        [ SIMULATE BLOCKED REQUEST ]
-      </button>
+      {isDevelopment && (
+        <button onClick={simulateBreach} className="pointer-events-auto opacity-55 hover:opacity-100 text-danger transition-opacity">
+          [ SIMULATE BLOCKED REQUEST ]
+        </button>
+      )}
 
-      <div className={`flex items-center gap-2 px-3 py-1.5 rounded border backdrop-blur-sm transition-all duration-300 ${
+      <div
+        role="status"
+        aria-live="polite"
+        className={`flex items-center gap-2 px-3 py-1.5 rounded border backdrop-blur-sm transition-all duration-300 ${
         breach
           ? "bg-[#ff003c]/20 border-[#ff003c] text-[#ff003c] scale-110 shadow-[0_0_20px_rgba(255,0,60,0.5)]"
           : "bg-[#0a0a0a]/80 border-[#00FF41]/30 text-[#00FF41] shadow-[0_0_10px_rgba(0,255,65,0.1)]"

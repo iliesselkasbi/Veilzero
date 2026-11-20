@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createTrackedObjectUrl, revokeTrackedObjectUrl } from "@/lib/burn";
 import { detectKind, formatBytes } from "@/lib/fileUtils";
 
 export default function FilePreview({ file }: { file: File | Blob; name?: string }) {
   const [url, setUrl] = useState<string>("");
   useEffect(() => {
-    const u = URL.createObjectURL(file);
+    const u = createTrackedObjectUrl(file);
     setUrl(u);
-    return () => URL.revokeObjectURL(u);
+    return () => revokeTrackedObjectUrl(u);
   }, [file]);
 
   const f = file as File;

@@ -3,9 +3,9 @@
 **Off-grid coordination for life in the Hollow.**
 
 **Launch Live App:** **https://veilzero.vercel.app/**
-> *(Runs 100% client-side in your browser over HTTPS. No login, no uploads, and works offline once cached.)*
+> *(Runs in the browser over HTTPS; source media is not sent to an application server. Offline use requires the PWA shell and assets to have been cached.)*
 
-VEILZERO is a 100% client-side anti-surveillance toolkit built to keep working when the uplink dies. Cloaks your face, distorts your voice, scrubs identifying file metadata, and seals exports into offline **Resistance Drops**. Nothing uploads. No accounts. Zero external requests.
+VEILZERO is a browser-based privacy toolkit built to keep working when the uplink dies. It obscures your face, transforms your voice, scrubs identifying file metadata, and seals exports into offline **Resistance Drops**. Media is processed locally and is not uploaded by the app. No accounts are required.
 
 ---
 
@@ -15,9 +15,9 @@ VEILZERO is a 100% client-side anti-surveillance toolkit built to keep working w
 |---|---|---|
 | **Witness Cam** | `/live` | Real-time webcam face masking (on-device MediaPipe) + native Web Audio pitch/timbre distortion. Includes a fail-closed killswitch if tracking slips. |
 | **Evidence Scrub** | `/clean` | Strips identifying metadata (GPS, device, author, timestamps) while keeping safe structural tags (dimensions, bit depth). Includes local SHA-256 integrity hashing. |
-| **Resistance Drop** | `/live` & `/clean` | Seals media into a self-contained, password-protected HTML file using **AES-256-GCM**. Opens offline and features a one-click **Burn View** wipe. |
+| **Resistance Drop** | `/live` & `/clean` | Seals media into a self-contained, password-protected HTML file using **AES-256-GCM**. Opens offline and includes a **BURN VIEW** control to revoke the decrypted object URL and clear the displayed media. |
 | **Blackout Mode** | Global | Production PWA + Service Worker caches the app shell and ML models so the toolkit runs completely offline. |
-| **Global Burn & HUD** | Global | Live corner telemetry (`● ZERO-TRUST SECURE \| 0 EXT REQ`) and a navigation **BURN** button that wipes session state and revokes object URLs. |
+| **Global Burn & HUD** | Global | Best-effort network telemetry (`NETWORK STATUS: NO EXTERNAL REQUESTS OBSERVED`) and a navigation **BURN** action that revokes registered object URLs. Offline-cache removal is a separate, explicit action. |
 
 ---
 
@@ -49,22 +49,20 @@ npm run demo
 1. Open `http://localhost:3000` and visit `/`, `/live`, `/clean`, and `/about` once to seed the cache.
 2. Open **DevTools → Application → Service Workers** and confirm the worker is **activated**.
 3. Open **DevTools → Network**, set throttling to **Offline**, and hard-reload the page.
-4. Test Witness Cam, Evidence Scrub, and Resistance Drops — the app continues working with **`0 EXT REQ`** on the HUD.
+4. Test Witness Cam, Evidence Scrub, and Resistance Drops — the HUD reports requests it has observed; this is not a guarantee that no request can ever occur.
 
 ---
 
-## How the Privacy Guarantees Are Built
+## Privacy Design and Limitations
 
-* **Zero External Requests:** All fonts, scripts, and MediaPipe WASM/model files are self-hosted in `/public/mediapipe`. No CDNs, telemetry, or cloud APIs exist.
-* **Live Zero-Trust HUD:** Real-time network monitoring (`● ZERO-TRUST SECURE | 0 EXT REQ`) that shifts to the critical alert state (`CRITICAL: NETWORK BREACH DETECTED | 1 EXT REQ`) upon clicking `[ INJECT TEST PACKET ]`.
+* **Network boundary:** Fonts, scripts, and MediaPipe WASM/model files are self-hosted. The restrictive CSP `connect-src 'self'` is the primary network boundary; JavaScript request guards are defense-in-depth, not a guarantee. The HUD is a best-effort observation of browser performance entries and CSP violations, not a complete network monitor.
 * **Raw Feed Never Exposed:** The raw camera `<video>` stays off-screen. Users and `MediaRecorder` only access the processed canvas and distorted audio stream.
 * **Fail-Closed Killswitch:** If face tracking drops or the lens is covered (~120ms–500ms), the frame blacks out/blurs and recording locks until a face is re-acquired.
 * **No Raw-Voice Path:** The Web Audio graph routes directly through the pitch/timbre chain. Muting silences output rather than bypassing processing.
 * **Verified Metadata Purge:** Files are re-scanned after stripping to confirm residual identifying threats equal `0`, paired with before/after local **SHA-256** checksums.
-* **Live Auditability:** The `/about` page monitors the browser `Performance API` in real time to verify `0` off-origin requests and `0` beacons.
-* **Hardened Headers:** `next.config.js` enforces `Referrer-Policy: no-referrer` and a strict `Permissions-Policy`.
-* **Network boundary:** a restrictive Content Security Policy rejects cross-origin resources, while runtime guards block cross-origin `fetch`, XHR, and beacon attempts. The HUD distinguishes blocked attempts from completed external requests.
-* **Encrypted drops:** stealth mode hides the filename and metadata until unlock. Payloads are encrypted in authenticated 1 MiB AES-GCM chunks; password-derived keys use PBKDF2-SHA-256 with 600,000 iterations. JavaScript memory clearing is best effort, not guaranteed zeroization.
+* **Network observations:** The `/about` page presents best-effort browser performance observations and can miss requests. It does not verify the absence of all network traffic.
+* **Hardened Headers:** `next.config.js` sets `Referrer-Policy: no-referrer` and a restrictive `Permissions-Policy`; the nonce-based CSP is set by Next's `proxy.ts`.
+* **Encrypted drops:** stealth mode hides the filename and metadata until unlock. Payloads are encrypted in authenticated 1 MiB AES-GCM chunks; the visible header is authenticated as additional data. Keys use PBKDF2-SHA-256 with the iteration count stored in the payload. JavaScript memory clearing is best effort, not guaranteed zeroization.
 * **Experimental face warp:** Ghost mode changes the face mesh geometrically, but is not validated against face-recognition systems. Use Void for full face redaction.
 
 ---
@@ -73,14 +71,14 @@ npm run demo
 
 | Format | Stripping Method |
 |---|---|
-| **JPEG** | Removes EXIF, XMP, IPTC, ICC, and comments (`APP1`–`APP15` except Adobe `APP14`, `COM`). Pixels remain untouched. |
-| **PNG** | Removes `tEXt`, `zTXt`, `iTXt`, `eXIf`, `tIME`, and `iCCP` chunks. Pixels remain untouched. |
-| **WebP** | Removes `EXIF`, `XMP`, and `ICCP` chunks. |
-| **Other Images** | Re-encoded through an HTML5 canvas pass to drop all embedded metadata. |
-| **MP4 / MOV / M4A** | Neutralizes `udta`, `meta`, `XMP`, and `uuid` boxes and clears creation/modification timestamps in place while preserving file size and offsets. |
+| **JPEG** | Removes EXIF, XMP, IPTC, ICC, and comments (`APP1`–`APP15` except Adobe `APP14`, `COM`). Pixels remain unchanged except when EXIF orientation must be applied through re-encoding. |
+| **PNG** | Keeps only image and animation structure (`IHDR`, `PLTE`, `IDAT`, `IEND`, `tRNS`, `acTL`, `fcTL`, `fdAT`). Other chunks, including C2PA, are discarded. |
+| **WebP** | Keeps only image and animation structure (`VP8X`, `VP8 `, `VP8L`, `ALPH`, `ANIM`, `ANMF`). Other chunks, including C2PA, are discarded. |
+| **Fallback** | If a supported image cannot be losslessly stripped, it is re-encoded through canvas; unsupported formats are refused. |
+| **MP4 / MOV / M4A** | Neutralizes `udta`, `meta`, `XMP`, and `uuid` boxes and clears creation/modification timestamps in place. Metadata-handler tracks such as GoPro `gpmd` are detected and warned about, but their media payloads are not removed. |
 | **PDF & Unsupported** | Detected and flagged, **not** stripped. Refused rather than falsely marked clean. |
 
-*(Note: Stripping EXIF also removes orientation tags, so certain mobile photos may display rotated.)*
+*(Color-profile metadata is removed where present, which can shift displayed colors. JPEGs with EXIF orientation are re-encoded to apply the orientation before the tag is removed. If a format requires canvas re-encoding, the export warns about possible quality or format changes.)*
 
 ---
 
@@ -110,6 +108,7 @@ src/
 ### Run CI Checks
 ```bash
 npm run lint
+npm test
 npm run typecheck
 npm run build
 ```
@@ -124,8 +123,12 @@ Drop `Cinzel-Regular.woff2`, `Cinzel-Bold.woff2`, and `JetBrainsMono-Regular.wof
 VEILZERO minimizes digital traces, but does not guarantee total anonymity:
 * Physical traits (clothing, background, gait, speech patterns, writing style) can still identify you.
 * Determined forensic audio analysis may partially reverse pitch/timbre distortion.
-* Embedded video streams may retain low-level encoder metadata tags.
+* Voice pitch/formant changes are reversible to a degree; do not treat them as reliable voice anonymization.
+* Embedded video streams may retain low-level encoder metadata tags or metadata-handler tracks.
+* Large media and Resistance Drops are held in browser memory during processing; large files can exhaust device memory.
 * "Coordination layer" refers to local preparation and offline file handoffs, not a live peer-to-peer mesh network.
+* The checked-in metadata fixtures are synthetic parser tests, not independently recorded evidence. Face recognition resistance has not been benchmarked; the optional benchmark requires a consented, representative image set. Browser smoke tests use a fake camera and do not validate physical camera hardware or recognition outcomes.
+* WebM cleanup clears selected muxing strings and the `DateUTC` field without re-muxing; other container metadata may remain.
 
 ## Third-Party Attribution
 * **MediaPipe Face Mesh:** Licensed under Apache License 2.0 (Google). Attribution is preserved in `public/mediapipe/`.

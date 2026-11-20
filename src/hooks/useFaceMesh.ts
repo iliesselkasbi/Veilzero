@@ -127,7 +127,7 @@ export function useFaceMesh(
         });
 
         mesh.setOptions({
-          maxNumFaces: 10,
+          maxNumFaces: 4,
           refineLandmarks: false,
           minDetectionConfidence: 0.5,
           minTrackingConfidence: 0.5,
@@ -143,8 +143,15 @@ export function useFaceMesh(
         if (!cancelled) setReady(true);
 
         let busy = false;
+        let frameIndex = 0;
         const tick = async () => {
           if (cancelled) return;
+          frameIndex++;
+          const lowPower = typeof navigator.hardwareConcurrency === "number" && navigator.hardwareConcurrency <= 4;
+          if (lowPower && frameIndex % 2 !== 0) {
+            rafRef.current = requestAnimationFrame(tick);
+            return;
+          }
           const v = videoRef.current;
           if (v && v.readyState >= 2 && !busy && meshRef.current) {
             busy = true;

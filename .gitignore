@@ -6,5 +6,6 @@ next-env.d.ts
 *.tsbuildinfo
 .env*
 public/mediapipe
+test-results
 aaa-main.zip
 EOF

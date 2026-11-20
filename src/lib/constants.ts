@@ -2,7 +2,7 @@ export const COPY = {
   ready: "Ready",
   cameraStarting: "Starting camera...",
   cameraActive: "Camera active",
-  faceCloaked: "Face: Cloaked",
+  faceCloaked: "Face: Obscured",
   voiceDistorted: "Voice: Distorted",
   recording: "Recording...",
   recordingDone: "Done. Ready to export.",

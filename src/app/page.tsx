@@ -14,7 +14,7 @@ export default function HomePage() {
         </h1>
         <p className="text-lg text-text-muted">
           When the deep levels blackout and the water recyclers fail, official numbers lie.
-          VEILZERO is an off-grid survival suite for the underground. Cloak your identity, strip tracking
+          VEILZERO is an off-grid privacy toolkit. Obscure identifying details, strip metadata
           data from evidence, and generate password-locked Resistance Drops. No uplink required.
         </p>
       </header>
@@ -24,9 +24,9 @@ export default function HomePage() {
           <div className="mb-4 font-mono text-xs tracking-widest text-[#00FF41]">MODULE 01</div>
           <h2 className="mb-2 font-display text-2xl font-bold">WITNESS CAM (LIVE)</h2>
           <p className="mb-6 text-sm text-text-muted">
-            Document conditions, sickness outbreaks, or surface proof safely. Cloaks face biometrics
-            and destroys your voiceprint before a single byte is recorded. Features a violent fail-closed
-            killswitch if tracking is lost.
+            Document conditions and evidence with on-device face masking and voice transformation.
+            These techniques reduce identifying detail but are not proven to defeat recognition.
+            The processed frame is hidden when face tracking is lost.
           </p>
           <Link
             href="/live"
@@ -55,8 +55,8 @@ export default function HomePage() {
       <div className="mt-16 rounded-xl border border-border bg-black p-8 font-mono text-sm text-text-muted">
         <h3 className="mb-4 text-[#00FF41] uppercase tracking-wide">Survival Protocol</h3>
         <ul className="space-y-2">
-          <li>&gt; 0 B of network traffic leaves this device. Confirmed by local HUD monitor.</li>
-          <li>&gt; 100% functionality maintained during multi-day Directorate blackouts.</li>
+          <li>&gt; Network observations are best-effort and do not prove that no traffic occurred.</li>
+          <li>&gt; Offline operation depends on the app shell and assets being cached first.</li>
           <li>&gt; Panic / Burn functions active on all secure tabs.</li>
           <li>&gt; Do not trust unofficial water safety reports unless secured via Resistance Drop.</li>
         </ul>

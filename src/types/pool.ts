@@ -4,4 +4,5 @@ export interface CleanResult {
   originalSize: number;
   cleanSize: number;
   tracesRemoved: number;
+  warnings?: string[];
 }

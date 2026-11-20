@@ -1,6 +1,6 @@
 "use client";
 import ThreatModel from "@/components/ui/ThreatModel";
-import { burnObjectUrls, burnTabHard } from "@/lib/burn";
+import { burnTabHard } from "@/lib/burn";
 import { useMetadata } from "@/hooks/useMetadata";
 import DropZone from "@/components/clean/DropZone";
 import FilePreview from "@/components/clean/FilePreview";
@@ -77,8 +77,7 @@ export default function CleanPage() {
                 variant="secondary"
                 className="border-danger/50 text-danger"
                 onClick={() => {
-                  burnObjectUrls();
-                  void burnTabHard();
+                  void burnTabHard().catch(() => alert("The tab could not be fully cleared."));
                   m.reset();
                 }}
                 >

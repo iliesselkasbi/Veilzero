@@ -2,7 +2,7 @@ import Badge from "@/components/ui/Badge";
 import StatusDot from "@/components/ui/StatusDot";
 import { COPY } from "@/lib/constants";
 
-/** Face tracking status chip. Shows "Cloaked" only while a face is actually being tracked and masked. */
+/** Face tracking status chip. Reports masking only while a face is actively tracked. */
 export default function FaceStatus({ cameraOn, tracking }: { cameraOn: boolean; tracking: boolean }) {
   if (!cameraOn) return <Badge>Face: Off</Badge>;
   return (

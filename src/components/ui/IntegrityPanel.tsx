@@ -91,7 +91,7 @@ export default function IntegrityPanel({
         <p className={`font-mono text-[11px] ${origHex === outHex ? "text-danger" : "text-success"}`}>
           {origHex === outHex
             ? "⚠ Hashes match — exact same file. No threats were removed (file was already clean)."
-            : "✓ Hashes differ — output is a new object. Cloak/Scrub successfully applied."}
+            : "✓ Hashes differ — output is a new object. Processing changed the file bytes."}
         </p>
       )}
     </div>

@@ -21,10 +21,10 @@ export default function About() {
           recyclers coughing sludge - the network is not a utility. It is a census.
         </p>
         <p className="max-w-2xl text-text-muted leading-relaxed">
-          VEILZERO is off-grid coordination gear. Faces cloaked on-device. Voices bent in
-          the browser. Metadata burned before a packet can form. Resistance Drops seal as
-          encrypted HTML you can hand across a dead-air gap. Nothing uploads. Nothing phones
-          home. If the lights die mid-transfer, the work stays on the machine that made it.
+          VEILZERO is off-grid coordination gear. Faces are obscured on-device, voices are
+          transformed in the browser, and supported metadata is stripped locally. These
+          measures are not a guarantee of anonymity. Resistance Drops seal as encrypted HTML
+          you can hand across a dead-air gap. Media files are not uploaded by the app.
         </p>
       </header>
 

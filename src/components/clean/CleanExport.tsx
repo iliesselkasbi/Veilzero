@@ -6,6 +6,7 @@ import IntegrityPanel from "@/components/ui/IntegrityPanel";
 import { download } from "@/lib/fileUtils";
 import type { CleanResult } from "@/types/pool";
 import { buildResistanceDrop } from "@/lib/resistanceDrop";
+import { generateSecureWordPassphrase } from "@/lib/passphrase";
 
 export default function CleanExport({
   result,
@@ -26,6 +27,10 @@ export default function CleanExport({
   async function exportDrop() {
     if (!password || password.length < 12) {
       setNote("Passphrase must be at least 12 characters.");
+      return;
+    }
+    if (result.blob.size > 256 * 1024 * 1024) {
+      setNote("File exceeds the 256 MB browser-memory safety limit.");
       return;
     }
     setBusy(true);
@@ -69,6 +74,12 @@ export default function CleanExport({
 
       <IntegrityPanel original={originalFile} output={result.blob} outputLabel="Cleaned" />
 
+      {result.warnings?.map((warning) => (
+        <p key={warning} className="rounded border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+          {warning}
+        </p>
+      ))}
+
       <Button
         onClick={() => download(result.blob, result.fileName)}
         className="w-full"
@@ -103,15 +114,32 @@ export default function CleanExport({
             {!stealth && " (normal mode keeps these visible without the passphrase)"}
           </span>
         </label>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          minLength={12}
-          autoComplete="new-password"
-          placeholder="Shared passphrase"
-          className="w-full rounded border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-primary"
-        />
+        {result.blob.size > 128 * 1024 * 1024 && (
+          <p className="rounded border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+            Large file: unlocking decrypts the entire payload into browser memory.
+          </p>
+        )}
+        <div className="flex gap-2">
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            minLength={12}
+            autoComplete="new-password"
+            placeholder="Shared passphrase"
+            className="min-w-0 flex-1 rounded border border-border bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-primary"
+          />
+          <Button
+            variant="ghost"
+            type="button"
+            onClick={() => setPassword(generateSecureWordPassphrase())}
+          >
+            Generate
+          </Button>
+        </div>
+        <p className="text-[11px] text-text-muted">
+          Generate creates a 12-word passphrase from six independently selected word pairs.
+        </p>
         <Button
           variant="secondary"
           className="w-full"
@@ -120,7 +148,7 @@ export default function CleanExport({
         >
           {busy ? "Encrypting…" : "Generate encrypted Drop .html"}
         </Button>
-        {note && <p className="font-mono text-[11px] text-text-muted">{note}</p>}
+        {note && <p className="font-mono text-[11px] text-text-muted" role="status" aria-live="polite">{note}</p>}
       </div>
     </div>
   );

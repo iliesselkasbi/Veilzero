@@ -132,7 +132,12 @@ async function networkFirst(req) {
   } catch {
     const hit = await cache.match(req);
     if (hit) return hit;
-    // Last resort: app shell
+    if (req.mode !== "navigate") {
+      return new Response("Offline — resource unavailable", {
+        status: 503,
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      });
+    }
     const shell = await cache.match("/");
     if (shell) return shell;
     return new Response(
@@ -144,7 +149,7 @@ async function networkFirst(req) {
     <style>
       body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
              background:#050505; color:#00FF41; font:14px/1.5 ui-monospace,monospace; padding:24px; }
-      box { max-width:36rem; border:1px solid #00FF41; padding:1.5rem; }
+      .box { max-width:36rem; border:1px solid #00FF41; padding:1.5rem; }
       h1 { margin:0 0 .75rem; font-size:1rem; letter-spacing:.12em; }
       p { color:#9ca3af; margin:.5rem 0; }
       code { color:#00FF41; }
@@ -159,7 +164,7 @@ async function networkFirst(req) {
       <p><code>npm run demo</code></p>
       <p>2. Open Witness Cam (turn on the camera once), Evidence Scrub, About Page once.</p>
       <p>3. You can then disconnect from the network. Media still never uploads — it never left the machine.</p>
-      <p>4. Avoid hitting the Red Burn Buttons or refreshing the page until network is online to stay operational.
+      <p>4. Avoid wiping offline data or refreshing the page until network is online to stay operational.</p>
       <p style="margin-top:1rem;color:#666">Dev mode (<code>npm run dev</code>) does not keep an offline shell on purpose.</p>
     </div>
   </body>

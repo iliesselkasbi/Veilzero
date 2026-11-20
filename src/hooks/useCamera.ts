@@ -30,11 +30,12 @@ export function useCamera() {
       }
       setMicStream(new MediaStream(stream.getAudioTracks()));
       setStatus("active");
-    } catch (e: any) {
+    } catch (error: unknown) {
       acquired?.getTracks().forEach((track) => track.stop());
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
-      setDenied(e?.name === "NotAllowedError" || e?.name === "SecurityError");
+      const name = error instanceof DOMException ? error.name : "";
+      setDenied(name === "NotAllowedError" || name === "SecurityError");
       setStatus("error");
     }
   }, []);

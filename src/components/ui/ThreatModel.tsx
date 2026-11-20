@@ -1,12 +1,13 @@
 const PROTECTS = [
-  "Face biometrics in recorded video (masks + killswitch)",
-  "Voice biometrics in recorded audio (pitch/formant chain)",
+  "Reducing face and voice identifying detail (mask + processed audio)",
   "EXIF/XMP/IPTC identity, device, GPS, timestamps (Clean)",
-  "Server-side logging of raw media (zero upload architecture)",
+  "Server-side logging of raw media (the app does not upload source media)",
   "Casual network exfil during session (on-page request HUD)",
 ];
 
 const DOES_NOT = [
+  "Strong face recognition in every lighting or pose",
+  "Forensic reversal resistance for voice pitch/formant changes",
   "Someone filming your screen with another camera",
   "Endpoint malware / browser compromise",
   "Your own words, handwriting style, clothing, room background",
